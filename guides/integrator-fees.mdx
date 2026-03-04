@@ -1,0 +1,468 @@
+---
+title: 'Integrator Fees'
+description: 'Add fees to orders and monetize your Fusion integration'
+---
+
+## Overview
+
+Integrator fees allow you to earn revenue from orders placed through your integration. The 1inch Fusion protocol supports configurable fees that are automatically deducted from the order output and sent to your specified receiver address.
+
+## How Integrator Fees Work
+
+<Note>
+Integrator fees are charged in basis points (bps) from the order's output amount. 1% = 100 bps.
+</Note>
+
+When you specify an integrator fee:
+1. The fee is calculated as a percentage of the output tokens
+2. The protocol automatically splits the fee between you and the 1inch protocol
+3. Your share is sent to your specified receiver address
+4. The remaining amount goes to the order maker
+
+## Fee Structure
+
+```typescript
+type IntegratorFeeRequest = {
+    receiver: Address  // Address to receive your portion of the fee
+    value: Bps         // Fee amount in basis points (100 = 1%)
+}
+```
+
+### Basis Points (Bps)
+
+- 1 bps = 0.01%
+- 10 bps = 0.1%
+- 100 bps = 1%
+- 1000 bps = 10%
+
+The protocol typically takes a share of the integrator fee. Your actual revenue will be less than the full `value` amount.
+
+## Adding Fees to Orders
+
+### Using placeOrder()
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+import { Address, Bps } from '@1inch/limit-order-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider: connector,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const orderInfo = await sdk.placeOrder({
+    fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // WETH
+    toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',   // USDC
+    amount: '50000000000000000', // 0.05 ETH
+    walletAddress: makerAddress,
+    // Add integrator fee
+    integratorFee: {
+        receiver: new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'),
+        value: new Bps(100n) // 1% fee
+    }
+})
+
+console.log('Order placed with integrator fee:', orderInfo.orderHash)
+```
+
+### Using getQuote()
+
+```typescript
+import { Address, Bps } from '@1inch/limit-order-sdk'
+
+const quote = await sdk.getQuote({
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000000',
+    walletAddress: makerAddress,
+    integratorFee: {
+        receiver: new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'),
+        value: new Bps(50n) // 0.5% fee
+    }
+})
+
+// Quote includes fee calculations
+console.log('Quote with integrator fee:', quote)
+```
+
+## Fee Response Information
+
+When you include an integrator fee in your request, the API response includes fee details:
+
+```typescript
+type IntegratorFeeResponse = {
+    receiver: Address  // Your fee receiver address
+    value: Bps        // Total fee charged (in bps)
+    share: Bps        // Your share of the fee (rest goes to protocol)
+}
+```
+
+### Calculating Your Revenue
+
+```typescript
+const quote = await sdk.getQuote({
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000000', // 1000 DAI
+    walletAddress: makerAddress,
+    integratorFee: {
+        receiver: new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'),
+        value: new Bps(100n) // 1% fee
+    }
+})
+
+if (quote.integratorFeeParams) {
+    console.log('Total fee charged:', quote.integratorFeeParams.value.toString(), 'bps')
+    console.log('Your share:', quote.integratorFeeParams.share.toString(), 'bps')
+    console.log('Receiver:', quote.integratorFeeParams.receiver.toString())
+}
+```
+
+## Fee Limits and Constraints
+
+<Warning>
+Integrator fees must be reasonable. Excessive fees may result in orders not being filled.
+</Warning>
+
+### Recommended Fee Ranges
+
+- **Conservative**: 10-25 bps (0.1% - 0.25%)
+- **Standard**: 25-50 bps (0.25% - 0.5%)
+- **Aggressive**: 50-100 bps (0.5% - 1%)
+
+### Maximum Fee
+
+The protocol enforces a maximum fee of approximately 6553 bps (65.53%). However, practical limits are much lower:
+
+```typescript
+// Reasonable fee
+value: new Bps(50n) // ✓ 0.5%
+
+// High but acceptable
+value: new Bps(200n) // ✓ 2%
+
+// Discouraged - may not fill
+value: new Bps(1000n) // ⚠ 10%
+
+// Too high - will likely be rejected
+value: new Bps(7000n) // ✗ 70%
+```
+
+## Complete Examples
+
+<CodeGroup>
+```typescript Standard Order with Fee
+import {
+    FusionSDK,
+    NetworkEnum,
+    PrivateKeyProviderConnector
+} from '@1inch/fusion-sdk'
+import { Address, Bps } from '@1inch/limit-order-sdk'
+import { JsonRpcProvider } from 'ethers'
+
+const provider = new JsonRpcProvider('YOUR_RPC_URL')
+const connector = new PrivateKeyProviderConnector(
+    'YOUR_PRIVATE_KEY',
+    provider
+)
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider: connector,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+async function placeOrderWithFee() {
+    const orderInfo = await sdk.placeOrder({
+        fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        amount: '1000000000000000000', // 1 WETH
+        walletAddress: '0x...',
+        integratorFee: {
+            receiver: new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'),
+            value: new Bps(50n) // 0.5% fee
+        }
+    })
+
+    console.log('Order with fee placed:', orderInfo.orderHash)
+    return orderInfo
+}
+
+placeOrderWithFee()
+```
+
+```typescript Quote with Fee Details
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+import { Address, Bps } from '@1inch/limit-order-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+async function getQuoteWithFee() {
+    const quote = await sdk.getQuote({
+        fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+        toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        amount: '10000000000000000000000', // 10,000 DAI
+        walletAddress: '0x...',
+        integratorFee: {
+            receiver: new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'),
+            value: new Bps(30n) // 0.3% fee
+        }
+    })
+
+    // Calculate expected fee revenue
+    if (quote.integratorFeeParams) {
+        const outputAmount = BigInt(
+            quote.presets[quote.recommendedPreset].auctionStartAmount
+        )
+        const totalFee = outputAmount * BigInt(quote.integratorFeeParams.value) / 10000n
+        const yourShare = totalFee * BigInt(quote.integratorFeeParams.share) / 10000n
+
+        console.log('Output amount:', outputAmount.toString())
+        console.log('Total fee:', totalFee.toString())
+        console.log('Your revenue:', yourShare.toString())
+    }
+
+    return quote
+}
+
+getQuoteWithFee()
+```
+
+```typescript Native Order with Fee
+import {
+    FusionSDK,
+    NetworkEnum,
+    NativeOrdersFactory,
+    Address
+} from '@1inch/fusion-sdk'
+import { Bps } from '@1inch/limit-order-sdk'
+import { Wallet } from 'ethers'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider: connector,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const wallet = new Wallet('YOUR_PRIVATE_KEY', provider)
+
+async function nativeOrderWithFee() {
+    const params = {
+        fromTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        amount: '1000000000000000000', // 1 ETH
+        walletAddress: wallet.address,
+        integratorFee: {
+            receiver: new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'),
+            value: new Bps(40n) // 0.4% fee
+        }
+    }
+
+    const preparedOrder = await sdk.createOrder(params)
+
+    const info = await sdk.submitNativeOrder(
+        preparedOrder.order,
+        new Address(params.walletAddress),
+        preparedOrder.quoteId
+    )
+
+    const factory = NativeOrdersFactory.default(NetworkEnum.ETHEREUM)
+    const call = factory.create(
+        new Address(wallet.address),
+        preparedOrder.order.build()
+    )
+
+    const tx = await wallet.sendTransaction({
+        to: call.to.toString(),
+        data: call.data,
+        value: call.value
+    })
+
+    await tx.wait()
+
+    console.log('Native order with fee placed:', info.orderHash)
+    return info
+}
+
+nativeOrderWithFee()
+```
+</CodeGroup>
+
+## Working with Address and Bps Classes
+
+### Creating Address Objects
+
+```typescript
+import { Address } from '@1inch/limit-order-sdk'
+
+// From string
+const receiver = new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb')
+
+// Convert to string
+console.log(receiver.toString())
+
+// Check validity
+if (!receiver.isZero()) {
+    console.log('Valid receiver address')
+}
+```
+
+### Creating Bps Objects
+
+```typescript
+import { Bps } from '@1inch/limit-order-sdk'
+
+// From bigint
+const fee1 = new Bps(100n) // 1%
+const fee2 = new Bps(50n)  // 0.5%
+
+// Check if zero
+if (!fee1.isZero()) {
+    console.log('Fee is configured')
+}
+
+// Get fraction (for calculations)
+const fraction = fee1.toFraction() // Returns 0.01 for 100 bps
+```
+
+## Fee Validation
+
+<Tip>
+Validate fee parameters before submitting orders to avoid errors.
+</Tip>
+
+```typescript
+import { Address, Bps } from '@1inch/limit-order-sdk'
+
+function validateIntegratorFee(
+    receiver: string,
+    value: bigint
+): { valid: boolean; error?: string } {
+    try {
+        const receiverAddr = new Address(receiver)
+        const feeBps = new Bps(value)
+
+        // Check if receiver is valid
+        if (receiverAddr.isZero()) {
+            return { valid: false, error: 'Receiver cannot be zero address' }
+        }
+
+        // Check if fee is zero
+        if (feeBps.isZero()) {
+            return { valid: false, error: 'Fee cannot be zero' }
+        }
+
+        // Check if fee is too high (above 10%)
+        if (value > 1000n) {
+            return {
+                valid: false,
+                error: 'Fee too high (max recommended 10% = 1000 bps)'
+            }
+        }
+
+        return { valid: true }
+    } catch (error) {
+        return { valid: false, error: error.message }
+    }
+}
+
+// Usage
+const validation = validateIntegratorFee(
+    '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    50n
+)
+
+if (!validation.valid) {
+    console.error('Invalid fee:', validation.error)
+}
+```
+
+## Fee Revenue Tracking
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+async function trackFeeRevenue(receiverAddress: string) {
+    // Get all orders by maker
+    const orders = await sdk.getOrdersByMaker({
+        address: receiverAddress,
+        page: 1,
+        limit: 100
+    })
+
+    let totalRevenue = 0n
+
+    for (const order of orders.items) {
+        // Check if order has fills
+        if (order.fills.length > 0) {
+            // Calculate fees from fills
+            order.fills.forEach(fill => {
+                if (fill.takerFeeAmount) {
+                    totalRevenue += BigInt(fill.takerFeeAmount)
+                }
+            })
+        }
+    }
+
+    console.log('Total fee revenue:', totalRevenue.toString())
+    return totalRevenue
+}
+```
+
+## Best Practices
+
+1. **Start Low**: Begin with conservative fees (0.1-0.25%) and adjust based on data
+2. **Transparent Pricing**: Clearly communicate fees to your users
+3. **Monitor Fill Rates**: High fees may reduce fill rates
+4. **Use Consistent Receiver**: Use the same receiver address for easier tracking
+5. **Consider Volume**: Lower fees on high-value orders may yield more revenue
+
+## Common Issues
+
+### Fee Not Applied
+
+<Warning>
+Ensure you're using the `Address` and `Bps` classes from `@1inch/limit-order-sdk`, not plain strings or numbers.
+</Warning>
+
+```typescript
+// ✗ Wrong - will not work
+integratorFee: {
+    receiver: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    value: 100
+}
+
+// ✓ Correct
+integratorFee: {
+    receiver: new Address('0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb'),
+    value: new Bps(100n)
+}
+```
+
+### Zero Revenue
+
+If you're not receiving fees:
+1. Verify the receiver address is correct
+2. Check that orders are being filled
+3. Confirm fee share is not zero
+4. Monitor your receiver address for incoming tokens
+
+## Next Steps
+
+- Learn about [Order Management](/guides/order-management) to track fee revenue
+- Use [WebSocket Integration](/guides/websocket-integration) for real-time order monitoring
+- Explore [Custom Presets](/guides/custom-presets) for advanced order strategies

@@ -1,0 +1,575 @@
+---
+title: 'WebSocket Integration'
+description: 'Real-time order tracking and event monitoring with WebSocket API'
+---
+
+## Overview
+
+The 1inch Fusion SDK provides a WebSocket API for real-time order tracking and event monitoring. This is more efficient than polling and provides instant updates when order status changes.
+
+## Why Use WebSockets?
+
+<Note>
+WebSocket connections provide real-time, bidirectional communication with the Fusion API. This is ideal for:
+- Real-time order status updates
+- Monitoring multiple orders simultaneously
+- Reducing API request load
+- Building responsive user interfaces
+</Note>
+
+## Quick Start
+
+```typescript
+import { WebSocketApi, NetworkEnum } from '@1inch/fusion-sdk'
+
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+ws.order.onOrder((event) => {
+    console.log('Order event:', event.event)
+    console.log('Order data:', event.data)
+})
+```
+
+## Creating WebSocket Connection
+
+### Basic Initialization
+
+```typescript
+import { WebSocketApi, NetworkEnum } from '@1inch/fusion-sdk'
+
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+// Connection opens automatically
+ws.onOpen(() => {
+    console.log('WebSocket connected')
+})
+
+ws.onError((error) => {
+    console.error('WebSocket error:', error)
+})
+
+ws.onClose(() => {
+    console.log('WebSocket connection closed')
+})
+```
+
+### Lazy Initialization
+
+<Tip>
+Use lazy initialization when you want to control when the WebSocket connection opens.
+</Tip>
+
+```typescript
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN',
+    lazyInit: true // Don't connect immediately
+})
+
+// Connect when ready
+ws.init()
+```
+
+### Using Static Factory Method
+
+```typescript
+const ws = WebSocketApi.new({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+```
+
+## Order Events
+
+The WebSocket API emits various order-related events:
+
+### All Order Events
+
+```typescript
+ws.order.onOrder((event) => {
+    switch (event.event) {
+        case 'order_created':
+            console.log('New order created:', event.data.orderHash)
+            break
+        case 'order_filled':
+            console.log('Order filled:', event.data.orderHash)
+            break
+        case 'order_filled_partially':
+            console.log('Order partially filled:', event.data.orderHash)
+            console.log('Remaining:', event.data.remainingMakerAmount)
+            break
+        case 'order_cancelled':
+            console.log('Order cancelled:', event.data.orderHash)
+            break
+        case 'order_invalid':
+            console.log('Order invalid:', event.data.orderHash)
+            break
+        case 'order_balance_or_allowance_change':
+            console.log('Balance/allowance changed:', event.data.orderHash)
+            break
+    }
+})
+```
+
+### Order Created Events
+
+```typescript
+ws.order.onOrderCreated((event) => {
+    console.log('Order created:', event.data.orderHash)
+    console.log('Signature:', event.data.signature)
+    console.log('Auction starts:', new Date(parseInt(event.data.auctionStartDate) * 1000))
+    console.log('Auction ends:', new Date(parseInt(event.data.auctionEndDate) * 1000))
+    console.log('Remaining amount:', event.data.remainingMakerAmount)
+})
+```
+
+### Order Filled Events
+
+```typescript
+ws.order.onOrderFilled((event) => {
+    console.log('Order completely filled:', event.data.orderHash)
+    // Order is now complete
+})
+```
+
+### Order Partially Filled Events
+
+```typescript
+ws.order.onOrderFilledPartially((event) => {
+    console.log('Order partially filled:', event.data.orderHash)
+    console.log('Remaining amount:', event.data.remainingMakerAmount)
+    // Order may still receive more fills
+})
+```
+
+### Order Cancelled Events
+
+```typescript
+ws.order.onOrderCancelled((event) => {
+    console.log('Order cancelled:', event.data.orderHash)
+    // Order will not be filled
+})
+```
+
+### Order Invalid Events
+
+```typescript
+ws.order.onOrderInvalid((event) => {
+    console.log('Order marked invalid:', event.data.orderHash)
+    // Check order parameters or signature
+})
+```
+
+### Balance/Allowance Change Events
+
+```typescript
+ws.order.onOrderBalanceOrAllowanceChange((event) => {
+    console.log('Order balance/allowance changed:', event.data.orderHash)
+    console.log('New balance:', event.data.balance)
+    console.log('New allowance:', event.data.allowance)
+    console.log('Remaining maker amount:', event.data.remainingMakerAmount)
+})
+```
+
+## Complete Order Monitoring Example
+
+```typescript
+import {
+    FusionSDK,
+    WebSocketApi,
+    NetworkEnum,
+    PrivateKeyProviderConnector
+} from '@1inch/fusion-sdk'
+import { JsonRpcProvider } from 'ethers'
+
+const provider = new JsonRpcProvider('YOUR_RPC_URL')
+const connector = new PrivateKeyProviderConnector(
+    'YOUR_PRIVATE_KEY',
+    provider
+)
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider: connector,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+async function placeAndMonitorOrder() {
+    let orderHash: string
+
+    // Set up event listeners before placing order
+    ws.order.onOrderCreated((event) => {
+        if (event.data.orderHash === orderHash) {
+            console.log('Our order was created')
+        }
+    })
+
+    ws.order.onOrderFilled((event) => {
+        if (event.data.orderHash === orderHash) {
+            console.log('Our order was filled!')
+            ws.close() // Close WebSocket when done
+        }
+    })
+
+    ws.order.onOrderFilledPartially((event) => {
+        if (event.data.orderHash === orderHash) {
+            console.log('Partial fill. Remaining:', event.data.remainingMakerAmount)
+        }
+    })
+
+    ws.order.onOrderCancelled((event) => {
+        if (event.data.orderHash === orderHash) {
+            console.log('Order was cancelled')
+            ws.close()
+        }
+    })
+
+    ws.order.onOrderInvalid((event) => {
+        if (event.data.orderHash === orderHash) {
+            console.error('Order marked invalid')
+            ws.close()
+        }
+    })
+
+    // Place the order
+    const orderInfo = await sdk.placeOrder({
+        fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        amount: '1000000000000000000',
+        walletAddress: '0x...'
+    })
+
+    orderHash = orderInfo.orderHash
+    console.log('Order placed:', orderHash)
+    console.log('Monitoring via WebSocket...')
+}
+
+placeAndMonitorOrder()
+```
+
+## RPC Methods
+
+The WebSocket API also supports RPC-style method calls:
+
+### Ping/Pong
+
+```typescript
+// Send ping
+ws.rpc.ping()
+
+// Listen for pong
+ws.rpc.onPong((data) => {
+    console.log('Pong received:', data)
+})
+```
+
+### Get Allowed Methods
+
+```typescript
+// Request list of allowed methods
+ws.rpc.getAllowedMethods()
+
+// Listen for response
+ws.rpc.onGetAllowedMethods((methods) => {
+    console.log('Allowed methods:', methods)
+})
+```
+
+### Get Active Orders
+
+```typescript
+// Request active orders
+ws.rpc.getActiveOrders()
+
+// Listen for response
+ws.rpc.onGetActiveOrders((data) => {
+    console.log('Active orders:', data.items.length)
+    data.items.forEach(order => {
+        console.log('Order:', order.orderHash)
+    })
+})
+```
+
+## Connection Management
+
+### Handling Connection Events
+
+```typescript
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+ws.onOpen(() => {
+    console.log('Connected to Fusion WebSocket')
+    // Set up event listeners or send initial messages
+})
+
+ws.onClose(() => {
+    console.log('Disconnected from Fusion WebSocket')
+    // Handle reconnection if needed
+})
+
+ws.onError((error) => {
+    console.error('WebSocket error:', error)
+    // Handle error (maybe reconnect)
+})
+
+ws.onMessage((data) => {
+    console.log('Raw message:', data)
+})
+```
+
+### Manual Connection Control
+
+```typescript
+// Close connection
+ws.close()
+
+// Send custom message
+ws.send({
+    method: 'custom_method',
+    params: {}
+})
+```
+
+### Reconnection Logic
+
+<Tip>
+Implement automatic reconnection for production applications to handle network issues.
+</Tip>
+
+```typescript
+function createWebSocketWithReconnect(config: any, maxRetries = 5) {
+    let ws: WebSocketApi
+    let retries = 0
+
+    function connect() {
+        ws = new WebSocketApi(config)
+
+        ws.onOpen(() => {
+            console.log('WebSocket connected')
+            retries = 0 // Reset retry counter on successful connection
+        })
+
+        ws.onClose(() => {
+            console.log('WebSocket closed')
+            if (retries < maxRetries) {
+                retries++
+                console.log(`Reconnecting (attempt ${retries}/${maxRetries})...`)
+                setTimeout(connect, 1000 * Math.pow(2, retries)) // Exponential backoff
+            } else {
+                console.error('Max reconnection attempts reached')
+            }
+        })
+
+        ws.onError((error) => {
+            console.error('WebSocket error:', error)
+        })
+
+        return ws
+    }
+
+    return connect()
+}
+
+const ws = createWebSocketWithReconnect({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+```
+
+## Event Type Definitions
+
+### OrderEventType
+
+```typescript
+type OrderEventType =
+    | OrderCreatedEvent
+    | OrderInvalidEvent
+    | OrderBalanceOrAllowanceChangeEvent
+    | OrderFilledEvent
+    | OrderFilledPartiallyEvent
+    | OrderCancelledEvent
+
+type OrderCreatedEvent = {
+    event: 'order_created'
+    data: {
+        orderHash: string
+        signature: string
+        order: LimitOrderV3Struct
+        deadline: string
+        auctionStartDate: string
+        auctionEndDate: string
+        remainingMakerAmount: string
+    }
+}
+
+type OrderFilledEvent = {
+    event: 'order_filled'
+    data: {
+        orderHash: string
+    }
+}
+
+type OrderFilledPartiallyEvent = {
+    event: 'order_filled_partially'
+    data: {
+        orderHash: string
+        remainingMakerAmount: string
+    }
+}
+
+type OrderCancelledEvent = {
+    event: 'order_cancelled'
+    data: {
+        orderHash: string
+    }
+}
+
+type OrderInvalidEvent = {
+    event: 'order_invalid'
+    data: {
+        orderHash: string
+    }
+}
+
+type OrderBalanceOrAllowanceChangeEvent = {
+    event: 'order_balance_or_allowance_change'
+    data: {
+        orderHash: string
+        remainingMakerAmount: string
+        balance: string
+        allowance: string
+    }
+}
+```
+
+## Custom WebSocket Provider
+
+<Note>
+You can provide a custom WebSocket implementation if needed (e.g., for specific environments or libraries).
+</Note>
+
+```typescript
+import { WsProviderConnector, WebSocketApi } from '@1inch/fusion-sdk'
+
+class CustomWebSocketProvider implements WsProviderConnector {
+    // Implement required methods
+    on(event: string, callback: Function): void {
+        // Your implementation
+    }
+
+    off(event: string, callback: Function): void {
+        // Your implementation
+    }
+
+    send(data: any): void {
+        // Your implementation
+    }
+
+    close(): void {
+        // Your implementation
+    }
+}
+
+const provider = new CustomWebSocketProvider({
+    url: 'wss://api.1inch.dev/fusion/ws/v2.0/1'
+})
+
+const ws = new WebSocketApi(provider)
+```
+
+## Network-Specific Connections
+
+<CodeGroup>
+```typescript Ethereum
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+```
+
+```typescript Binance Smart Chain
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.BINANCE,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+```
+
+```typescript Polygon
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.POLYGON,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+```
+</CodeGroup>
+
+## Best Practices
+
+1. **Set Up Listeners Before Placing Orders**: Register event handlers before creating orders to avoid missing events
+2. **Filter by Order Hash**: When monitoring specific orders, filter events by order hash
+3. **Handle All Events**: Implement handlers for all possible order states
+4. **Implement Reconnection**: Add automatic reconnection logic for production
+5. **Clean Up**: Close WebSocket connections when no longer needed
+6. **Error Handling**: Always implement error handlers
+7. **Lazy Loading**: Use lazy initialization for better resource management
+
+## Troubleshooting
+
+### Connection Fails
+
+```typescript
+ws.onError((error) => {
+    console.error('Connection error:', error)
+    // Check:
+    // 1. API key is valid
+    // 2. Network ID is correct
+    // 3. WebSocket URL is correct
+})
+```
+
+### Missing Events
+
+<Warning>
+Events may be missed if listeners are registered after the order is placed. Always set up listeners first.
+</Warning>
+
+### Authentication Issues
+
+```typescript
+// Ensure authKey is provided
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN' // Required
+})
+```
+
+## Next Steps
+
+- Learn about [Order Management](/guides/order-management) for polling-based status checks
+- Explore [Integrator Fees](/guides/integrator-fees) to monetize your integration
+- Check out [Custom Presets](/guides/custom-presets) for advanced order control

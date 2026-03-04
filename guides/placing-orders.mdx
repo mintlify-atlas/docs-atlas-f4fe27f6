@@ -1,0 +1,297 @@
+---
+title: 'Placing Orders'
+description: 'Learn how to create and submit Fusion orders'
+---
+
+## Overview
+
+The 1inch Fusion SDK provides multiple methods for creating and placing orders. This guide covers the complete workflow from getting a quote to submitting an order.
+
+## Order Flow
+
+<Steps>
+  <Step title="Get a Quote">
+    Request quote information for your swap parameters
+  </Step>
+  <Step title="Create Order">
+    Build the order structure with your parameters
+  </Step>
+  <Step title="Submit Order">
+    Submit the signed order to the 1inch Fusion network
+  </Step>
+  <Step title="Monitor Status">
+    Track the order status until it's filled or expires
+  </Step>
+</Steps>
+
+## Method 1: Using placeOrder()
+
+The `placeOrder()` method is the simplest way to create and submit an order. It handles the entire process in one call.
+
+### Basic Example
+
+```typescript
+import { FusionSDK, NetworkEnum, PrivateKeyProviderConnector } from '@1inch/fusion-sdk'
+import { Address, Bps } from '@1inch/limit-order-sdk'
+
+const makerPrivateKey = '0x123....'
+const makerAddress = '0x123....'
+
+const blockchainProvider = new PrivateKeyProviderConnector(
+    makerPrivateKey,
+    web3Provider
+)
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const orderInfo = await sdk.placeOrder({
+    fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', // WETH
+    toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48', // USDC
+    amount: '50000000000000000', // 0.05 ETH
+    walletAddress: makerAddress
+})
+
+console.log('Order placed:', orderInfo.orderHash)
+```
+
+### With Optional Parameters
+
+```typescript
+const orderInfo = await sdk.placeOrder({
+    fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    amount: '50000000000000000',
+    walletAddress: makerAddress,
+    // Optional: specify custom receiver
+    receiver: '0x...',
+    // Optional: choose execution speed preset
+    preset: PresetEnum.fast, // 'fast' | 'medium' | 'slow'
+    // Optional: custom nonce for batch cancellations
+    nonce: 1n,
+    // Optional: add integrator fee
+    integratorFee: {
+        receiver: new Address('0x...'),
+        value: new Bps(100n) // 1% = 100 bps
+    }
+})
+```
+
+## Method 2: Manual Order Creation
+
+For more control, you can manually create and submit orders using separate method calls.
+
+### Step-by-Step Process
+
+<CodeGroup>
+```typescript Complete Example
+import {
+    FusionSDK,
+    NetworkEnum,
+    OrderStatus,
+    PrivateKeyProviderConnector,
+    Web3Like
+} from '@1inch/fusion-sdk'
+import { computeAddress, formatUnits, JsonRpcProvider } from 'ethers'
+
+const PRIVATE_KEY = 'YOUR_PRIVATE_KEY'
+const NODE_URL = 'YOUR_WEB3_NODE_URL'
+const DEV_PORTAL_API_TOKEN = 'YOUR_DEV_PORTAL_API_TOKEN'
+
+const ethersRpcProvider = new JsonRpcProvider(NODE_URL)
+
+const ethersProviderConnector: Web3Like = {
+    eth: {
+        call(transactionConfig): Promise<string> {
+            return ethersRpcProvider.call(transactionConfig)
+        }
+    },
+    extend(): void {}
+}
+
+const connector = new PrivateKeyProviderConnector(
+    PRIVATE_KEY,
+    ethersProviderConnector
+)
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.BINANCE,
+    blockchainProvider: connector,
+    authKey: DEV_PORTAL_API_TOKEN
+})
+
+async function main() {
+    // Define swap parameters
+    const params = {
+        fromTokenAddress: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', // USDC
+        toTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',  // BNB
+        amount: '10000000000000000000', // 10 USDC
+        walletAddress: computeAddress(PRIVATE_KEY),
+        source: 'sdk-test'
+    }
+
+    // Step 1: Get quote
+    const quote = await sdk.getQuote(params)
+
+    const dstTokenDecimals = 18
+    console.log(
+        'Auction start amount',
+        formatUnits(
+            quote.presets[quote.recommendedPreset].auctionStartAmount,
+            dstTokenDecimals
+        )
+    )
+    console.log(
+        'Auction end amount',
+        formatUnits(
+            quote.presets[quote.recommendedPreset].auctionEndAmount,
+            dstTokenDecimals
+        )
+    )
+
+    // Step 2: Create order
+    const preparedOrder = await sdk.createOrder(params)
+
+    // Step 3: Submit order
+    const info = await sdk.submitOrder(
+        preparedOrder.order,
+        preparedOrder.quoteId
+    )
+
+    console.log('OrderHash', info.orderHash)
+
+    // Step 4: Monitor order status
+    const start = Date.now()
+
+    while (true) {
+        try {
+            const data = await sdk.getOrderStatus(info.orderHash)
+
+            if (data.status === OrderStatus.Filled) {
+                console.log('fills', data.fills)
+                break
+            }
+
+            if (data.status === OrderStatus.Expired) {
+                console.log('Order Expired')
+                break
+            }
+            
+            if (data.status === OrderStatus.Cancelled) {
+                console.log('Order Cancelled')
+                break
+            }
+        } catch (e) {
+            console.log(e)
+        }
+    }
+
+    console.log('Order executed for', (Date.now() - start) / 1000, 'sec')
+}
+
+main()
+```
+
+```typescript Step 1: Get Quote
+const quote = await sdk.getQuote({
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000000',
+    walletAddress: '0x...'
+})
+
+// Inspect available presets
+console.log('Recommended preset:', quote.recommendedPreset)
+console.log('Available presets:', Object.keys(quote.presets))
+```
+
+```typescript Step 2: Create Order
+const preparedOrder = await sdk.createOrder({
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000000',
+    walletAddress: makerAddress,
+    preset: PresetEnum.medium // Optional: defaults to recommended
+})
+```
+
+```typescript Step 3: Submit Order
+const orderInfo = await sdk.submitOrder(
+    preparedOrder.order,
+    preparedOrder.quoteId
+)
+
+console.log('Order Hash:', orderInfo.orderHash)
+```
+</CodeGroup>
+
+## Order Parameters
+
+### Required Parameters
+
+- `fromTokenAddress`: Address of the token you're selling
+- `toTokenAddress`: Address of the token you're buying
+- `amount`: Amount to sell (in wei/smallest unit)
+- `walletAddress`: Your wallet address (order maker)
+
+### Optional Parameters
+
+- `receiver`: Address to receive the output tokens (defaults to `walletAddress`)
+- `preset`: Execution speed preset (`fast`, `medium`, `slow`)
+- `nonce`: Custom nonce for batch order cancellations
+- `permit`: EIP-2612 permit call data for gasless approvals
+- `integratorFee`: Fee configuration for integrators
+- `source`: String identifier for tracking order sources
+
+## Execution Presets
+
+<Note>
+Presets control the auction duration and price curve for your order.
+</Note>
+
+- **fast**: Quick execution with smaller price improvement
+- **medium**: Balanced execution time and price (recommended)
+- **slow**: Longer auction for maximum price improvement
+
+## Best Practices
+
+<Tip>
+Always monitor order status after submission to handle expired or failed orders appropriately.
+</Tip>
+
+1. **Error Handling**: Wrap order submission in try-catch blocks
+2. **Status Monitoring**: Poll order status regularly or use WebSocket integration
+3. **Allowances**: Ensure token approvals are set before placing orders
+4. **Gas Estimation**: Consider network conditions when choosing presets
+5. **Testing**: Test with small amounts first on testnets
+
+## Common Issues
+
+### Insufficient Allowance
+
+If you haven't approved the Fusion contract to spend your tokens:
+
+```typescript
+// First, approve the token
+import { getContractAddress } from '@1inch/fusion-sdk'
+
+const fusionContract = getContractAddress(NetworkEnum.ETHEREUM)
+// Use your web3 library to approve the token for fusionContract
+```
+
+### Invalid Order Parameters
+
+<Warning>
+Ensure amounts are in the smallest token unit (wei) and addresses are valid checksummed addresses.
+</Warning>
+
+## Next Steps
+
+- Learn about [Native Token Swaps](/guides/native-token-swaps) for ETH/BNB trades
+- Configure [Custom Presets](/guides/custom-presets) for advanced auction control
+- Explore [Order Management](/guides/order-management) to check and cancel orders

@@ -1,0 +1,115 @@
+---
+title: Installation
+description: Install and set up the 1inch Fusion SDK in your project
+---
+
+The 1inch Fusion SDK provides a complete toolkit for interacting with Fusion Mode, enabling gasless, secure token swaps with MEV protection.
+
+## Package Installation
+
+Install the SDK using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install @1inch/fusion-sdk@2
+```
+
+```bash yarn
+yarn add @1inch/fusion-sdk@2
+```
+
+```bash pnpm
+pnpm add @1inch/fusion-sdk@2
+```
+</CodeGroup>
+
+## Peer Dependencies
+
+The SDK has the following peer dependencies:
+
+- `axios` >= 1.0.0 (optional)
+- `assert` ^2.0.0 (optional)
+
+The SDK also depends on:
+- `ethers` 6.16.0 (included as a direct dependency)
+- `@1inch/limit-order-sdk` 5.2.2 (included)
+
+## Supported Networks
+
+The Fusion SDK supports the following blockchain networks:
+
+<CardGroup cols={2}>
+  <Card title="Ethereum" icon="ethereum">
+    Network ID: `1`
+  </Card>
+  <Card title="BNB Chain" icon="coins">
+    Network ID: `56`
+  </Card>
+  <Card title="Polygon" icon="circle-nodes">
+    Network ID: `137`
+  </Card>
+  <Card title="Arbitrum" icon="layer-group">
+    Network ID: `42161`
+  </Card>
+  <Card title="Optimism" icon="bolt">
+    Network ID: `10`
+  </Card>
+  <Card title="Avalanche" icon="mountain">
+    Network ID: `43114`
+  </Card>
+  <Card title="zkSync" icon="shield">
+    Network ID: `324`
+  </Card>
+  <Card title="Base" icon="cube">
+    Network ID: `8453`
+  </Card>
+</CardGroup>
+
+## Basic Setup
+
+Once installed, import the SDK and initialize it with your configuration:
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+```
+
+### Configuration Parameters
+
+The `FusionSDK` constructor accepts a configuration object with the following parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `url` | `string` | Yes | The Fusion API endpoint URL |
+| `network` | `NetworkEnum` | Yes | The blockchain network to use |
+| `authKey` | `string` | No | Your 1inch Dev Portal API token for authentication |
+| `blockchainProvider` | `BlockchainProviderConnector` | No | Provider for blockchain interactions (required for creating orders) |
+| `httpProvider` | `HttpProviderConnector` | No | Custom HTTP provider (defaults to axios) |
+
+<Info>
+  Get your API token from the [1inch Developer Portal](https://portal.1inch.dev) to access the Fusion API.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Quickstart"
+    icon="bolt"
+    href="/quickstart"
+  >
+    Create your first swap with Fusion Mode
+  </Card>
+  <Card
+    title="SDK Reference"
+    icon="book"
+    href="/api/fusion-sdk"
+  >
+    Explore all SDK methods and types
+  </Card>
+</CardGroup>

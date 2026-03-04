@@ -1,0 +1,376 @@
+---
+title: Configuration
+description: Configuration types and options for the 1inch Fusion SDK
+---
+
+This page documents the configuration parameters, network enums, and connector interfaces used throughout the 1inch Fusion SDK.
+
+## FusionSDKConfigParams
+
+Configuration object for initializing the FusionSDK.
+
+```typescript
+type FusionSDKConfigParams = {
+  url: string
+  network: NetworkEnum
+  authKey?: string
+  blockchainProvider?: BlockchainProviderConnector
+  httpProvider?: HttpProviderConnector
+}
+```
+
+<ParamField path="url" type="string" required>
+  API endpoint URL for the Fusion API
+  
+  Example: `https://api.1inch.dev/fusion`
+</ParamField>
+
+<ParamField path="network" type="NetworkEnum" required>
+  Blockchain network to operate on
+  
+  See [NetworkEnum](#networkenum) for available values
+</ParamField>
+
+<ParamField path="authKey" type="string">
+  Authentication key for accessing the Fusion API
+  
+  Required for production use and higher rate limits
+</ParamField>
+
+<ParamField path="blockchainProvider" type="BlockchainProviderConnector">
+  Custom blockchain provider for signing transactions and making contract calls
+  
+  See [BlockchainProviderConnector](#blockchainproviderconnector) for interface details
+</ParamField>
+
+<ParamField path="httpProvider" type="HttpProviderConnector">
+  Custom HTTP provider for API requests
+  
+  Defaults to axios if not provided. See [HttpProviderConnector](#httpproviderconnector) for interface details
+</ParamField>
+
+## NetworkEnum
+
+Supported blockchain networks for Fusion Mode.
+
+```typescript
+enum NetworkEnum {
+  ETHEREUM = 1,
+  POLYGON = 137,
+  ZKSYNC = 324,
+  BINANCE = 56,
+  ARBITRUM = 42161,
+  AVALANCHE = 43114,
+  OPTIMISM = 10,
+  FANTOM = 250,
+  GNOSIS = 100,
+  COINBASE = 8453,
+  LINEA = 59144,
+  SONIC = 146,
+  UNICHAIN = 130
+}
+```
+
+### Supported Networks
+
+<ResponseField name="ETHEREUM" type="1">
+  Ethereum Mainnet
+</ResponseField>
+
+<ResponseField name="POLYGON" type="137">
+  Polygon (Matic) Network
+</ResponseField>
+
+<ResponseField name="ZKSYNC" type="324">
+  zkSync Era
+</ResponseField>
+
+<ResponseField name="BINANCE" type="56">
+  BNB Smart Chain (BSC)
+</ResponseField>
+
+<ResponseField name="ARBITRUM" type="42161">
+  Arbitrum One
+</ResponseField>
+
+<ResponseField name="AVALANCHE" type="43114">
+  Avalanche C-Chain
+</ResponseField>
+
+<ResponseField name="OPTIMISM" type="10">
+  Optimism
+</ResponseField>
+
+<ResponseField name="FANTOM" type="250">
+  Fantom Opera
+</ResponseField>
+
+<ResponseField name="GNOSIS" type="100">
+  Gnosis Chain
+</ResponseField>
+
+<ResponseField name="COINBASE" type="8453">
+  Base (Coinbase L2)
+</ResponseField>
+
+<ResponseField name="LINEA" type="59144">
+  Linea
+</ResponseField>
+
+<ResponseField name="SONIC" type="146">
+  Sonic
+</ResponseField>
+
+<ResponseField name="UNICHAIN" type="130">
+  Unichain
+</ResponseField>
+
+## BlockchainProviderConnector
+
+Interface for custom blockchain providers that handle transaction signing and contract calls.
+
+```typescript
+interface BlockchainProviderConnector {
+  signTypedData(
+    walletAddress: string,
+    typedData: EIP712TypedData
+  ): Promise<string>
+
+  ethCall(contractAddress: string, callData: string): Promise<string>
+}
+```
+
+### Methods
+
+#### signTypedData
+
+Signs EIP-712 typed data for order creation.
+
+<ParamField path="walletAddress" type="string" required>
+  The wallet address performing the signing
+</ParamField>
+
+<ParamField path="typedData" type="EIP712TypedData" required>
+  The typed data structure to sign (EIP-712 format)
+</ParamField>
+
+<ResponseField name="signature" type="string">
+  The resulting signature as a hex string
+</ResponseField>
+
+#### ethCall
+
+Performs a read-only contract call.
+
+<ParamField path="contractAddress" type="string" required>
+  The contract address to call
+</ParamField>
+
+<ParamField path="callData" type="string" required>
+  Encoded call data (hex string)
+</ParamField>
+
+<ResponseField name="result" type="string">
+  The call result as a hex string
+</ResponseField>
+
+### Example Implementation
+
+```typescript
+import Web3 from 'web3'
+import { BlockchainProviderConnector } from '@1inch/fusion-sdk'
+
+class CustomBlockchainProvider implements BlockchainProviderConnector {
+  constructor(private web3: Web3, private privateKey: string) {}
+
+  async signTypedData(
+    walletAddress: string,
+    typedData: EIP712TypedData
+  ): Promise<string> {
+    const account = this.web3.eth.accounts.privateKeyToAccount(this.privateKey)
+    const signature = await account.signTypedData(typedData)
+    return signature.signature
+  }
+
+  async ethCall(contractAddress: string, callData: string): Promise<string> {
+    return this.web3.eth.call({
+      to: contractAddress,
+      data: callData
+    })
+  }
+}
+```
+
+## HttpProviderConnector
+
+Interface for custom HTTP providers that handle API requests.
+
+```typescript
+interface HttpProviderConnector {
+  get<T>(url: string): Promise<T>
+
+  post<T>(url: string, data: unknown): Promise<T>
+}
+```
+
+### Methods
+
+#### get
+
+Performs a GET request.
+
+<ParamField path="url" type="string" required>
+  The URL to request
+</ParamField>
+
+<ResponseField name="response" type="T">
+  The response data (typed)
+</ResponseField>
+
+#### post
+
+Performs a POST request.
+
+<ParamField path="url" type="string" required>
+  The URL to request
+</ParamField>
+
+<ParamField path="data" type="unknown" required>
+  The request body data
+</ParamField>
+
+<ResponseField name="response" type="T">
+  The response data (typed)
+</ResponseField>
+
+### Example Implementation
+
+```typescript
+import axios from 'axios'
+import { HttpProviderConnector } from '@1inch/fusion-sdk'
+
+class CustomHttpProvider implements HttpProviderConnector {
+  async get<T>(url: string): Promise<T> {
+    const response = await axios.get(url)
+    return response.data
+  }
+
+  async post<T>(url: string, data: unknown): Promise<T> {
+    const response = await axios.post(url, data)
+    return response.data
+  }
+}
+```
+
+## WsApiConfigWithNetwork
+
+Configuration object for WebSocket API connections.
+
+```typescript
+type WsApiConfigWithNetwork = {
+  url: string
+  network: NetworkEnum
+  authKey?: string
+  lazyInit?: boolean
+}
+```
+
+<ParamField path="url" type="string" required>
+  WebSocket endpoint URL
+  
+  Example: `wss://api.1inch.dev/fusion/ws`
+</ParamField>
+
+<ParamField path="network" type="NetworkEnum" required>
+  Blockchain network to connect to
+</ParamField>
+
+<ParamField path="authKey" type="string">
+  Authentication key for WebSocket access
+</ParamField>
+
+<ParamField path="lazyInit" type="boolean">
+  If `true`, delays connection until `init()` is called
+  
+  Default: `false`
+</ParamField>
+
+## Common Types
+
+### IntegratorFeeRequest
+
+Integrator fee configuration for requests.
+
+```typescript
+type IntegratorFeeRequest = {
+  receiver: Address
+  value: Bps
+}
+```
+
+<ParamField path="receiver" type="Address" required>
+  Address that will receive the integrator fee
+</ParamField>
+
+<ParamField path="value" type="Bps" required>
+  Fee amount in basis points (1% = 100 bps)
+  
+  Example: `new Bps(100n)` for 1%
+</ParamField>
+
+### PresetEnum
+
+Auction speed presets.
+
+```typescript
+enum PresetEnum {
+  fast = 'fast',
+  medium = 'medium',
+  slow = 'slow',
+  custom = 'custom'
+}
+```
+
+<ResponseField name="fast" type="string">
+  Fast auction (shorter duration, quicker execution)
+</ResponseField>
+
+<ResponseField name="medium" type="string">
+  Medium-speed auction (balanced)
+</ResponseField>
+
+<ResponseField name="slow" type="string">
+  Slow auction (longer duration, potentially better pricing)
+</ResponseField>
+
+<ResponseField name="custom" type="string">
+  Custom auction with user-defined parameters
+</ResponseField>
+
+## Example Configuration
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+import { PrivateKeyProviderConnector } from '@1inch/fusion-sdk'
+import Web3 from 'web3'
+
+// Basic configuration
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  authKey: 'your-auth-key'
+})
+
+// With custom blockchain provider
+const blockchainProvider = new PrivateKeyProviderConnector(
+  '0x...private-key',
+  new Web3('https://eth-mainnet.g.alchemy.com/v2/...')
+)
+
+const sdkWithProvider = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  blockchainProvider,
+  authKey: 'your-auth-key'
+})
+```

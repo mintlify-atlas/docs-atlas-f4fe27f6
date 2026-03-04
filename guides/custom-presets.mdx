@@ -1,0 +1,351 @@
+---
+title: 'Custom Presets'
+description: 'Configure custom auction parameters for advanced order execution'
+---
+
+## Overview
+
+Custom presets allow you to fine-tune the auction mechanism for your Fusion orders. Instead of using the default presets (fast, medium, slow), you can specify exact auction parameters including duration, price curve, and custom points.
+
+## What Are Presets?
+
+<Note>
+Presets control the Dutch auction mechanism that Fusion uses to fill orders. They define:
+- How long the auction runs
+- Starting and ending output amounts
+- Custom price curve points for non-linear pricing
+</Note>
+
+**Default Presets:**
+- `fast`: Quick execution with smaller price improvement
+- `medium`: Balanced approach (recommended)
+- `slow`: Longer auction for maximum price improvement
+
+## Using getQuoteWithCustomPreset
+
+The `getQuoteWithCustomPreset()` method lets you define custom auction parameters:
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const params = {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',   // WETH
+    amount: '1000000000000000000000' // 1000 DAI
+}
+
+const body = {
+    customPreset: {
+        auctionDuration: 180,        // Duration in seconds
+        auctionStartAmount: '100000', // Starting output amount
+        auctionEndAmount: '50000'     // Ending output amount
+    }
+}
+
+const quote = await sdk.getQuoteWithCustomPreset(params, body)
+```
+
+## Custom Preset Parameters
+
+### Basic Parameters
+
+#### auctionDuration
+
+<Tip>
+Longer durations allow more time for resolvers to compete, potentially resulting in better prices.
+</Tip>
+
+```typescript
+auctionDuration: 180 // Auction runs for 180 seconds (3 minutes)
+```
+
+- **Type**: `number` (integer)
+- **Unit**: Seconds
+- **Typical Range**: 60-600 seconds
+
+#### auctionStartAmount
+
+```typescript
+auctionStartAmount: '100000' // Starting output amount (in token's smallest unit)
+```
+
+- **Type**: `string`
+- **Description**: Best possible output amount at auction start
+- **Format**: Token's smallest unit (wei for ETH, etc.)
+
+#### auctionEndAmount
+
+```typescript
+auctionEndAmount: '50000' // Minimum acceptable output amount
+```
+
+- **Type**: `string`
+- **Description**: Minimum output amount at auction end
+- **Format**: Token's smallest unit (wei for ETH, etc.)
+
+<Warning>
+`auctionStartAmount` must be greater than or equal to `auctionEndAmount`
+</Warning>
+
+## Advanced: Custom Points
+
+Define a non-linear price curve with custom points:
+
+```typescript
+const body = {
+    customPreset: {
+        auctionDuration: 180,
+        auctionStartAmount: '100000',
+        auctionEndAmount: '50000',
+        // Custom price curve points
+        points: [
+            { toTokenAmount: '90000', delay: 20 },  // After 20 seconds
+            { toTokenAmount: '70000', delay: 40 }   // After 40 seconds
+        ]
+    }
+}
+```
+
+### Point Constraints
+
+<Steps>
+  <Step title="Amount Range">
+    Each point's `toTokenAmount` must be between `auctionStartAmount` and `auctionEndAmount`
+  </Step>
+  <Step title="Time Order">
+    Points must be ordered by increasing `delay` values
+  </Step>
+  <Step title="Format">
+    Amounts must be valid numeric strings in the token's smallest unit
+  </Step>
+</Steps>
+
+```typescript
+// Valid points
+points: [
+    { toTokenAmount: '90000', delay: 20 },  // ✓ Within range
+    { toTokenAmount: '70000', delay: 40 },  // ✓ Increasing delay
+    { toTokenAmount: '60000', delay: 80 }   // ✓ Approaching end amount
+]
+
+// Invalid points
+points: [
+    { toTokenAmount: '110000', delay: 20 }, // ✗ Above start amount
+    { toTokenAmount: '40000', delay: 40 }   // ✗ Below end amount
+]
+```
+
+## Complete Example
+
+<CodeGroup>
+```typescript Linear Auction
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const params = {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000000',
+    walletAddress: '0x...'
+}
+
+// Simple linear auction: price decreases linearly over 3 minutes
+const quote = await sdk.getQuoteWithCustomPreset(
+    params,
+    {
+        customPreset: {
+            auctionDuration: 180,
+            auctionStartAmount: '500000000000000000', // 0.5 WETH
+            auctionEndAmount: '450000000000000000'    // 0.45 WETH
+        }
+    }
+)
+
+console.log('Custom quote:', quote)
+```
+
+```typescript Non-Linear Auction
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const params = {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000000',
+    walletAddress: '0x...'
+}
+
+// Non-linear auction: rapid initial decrease, then slower
+const quote = await sdk.getQuoteWithCustomPreset(
+    params,
+    {
+        customPreset: {
+            auctionDuration: 300,
+            auctionStartAmount: '500000000000000000',  // 0.5 WETH
+            auctionEndAmount: '450000000000000000',    // 0.45 WETH
+            points: [
+                // Rapid decrease in first 30 seconds
+                { toTokenAmount: '490000000000000000', delay: 10 },
+                { toTokenAmount: '480000000000000000', delay: 20 },
+                { toTokenAmount: '470000000000000000', delay: 30 },
+                // Slower decrease afterwards
+                { toTokenAmount: '465000000000000000', delay: 100 },
+                { toTokenAmount: '460000000000000000', delay: 200 }
+            ]
+        }
+    }
+)
+
+console.log('Custom quote:', quote)
+```
+</CodeGroup>
+
+## Creating Orders with Custom Presets
+
+After getting a quote with a custom preset, create the order normally:
+
+```typescript
+// Get custom quote
+const quote = await sdk.getQuoteWithCustomPreset(params, {
+    customPreset: {
+        auctionDuration: 180,
+        auctionStartAmount: '500000000000000000',
+        auctionEndAmount: '450000000000000000'
+    }
+})
+
+// Create order with the custom preset
+const preparedOrder = await sdk.createOrder(params)
+
+// Submit order
+const orderInfo = await sdk.submitOrder(
+    preparedOrder.order,
+    preparedOrder.quoteId
+)
+```
+
+## Use Cases
+
+### High-Value Trades
+
+```typescript
+// Longer auction for better price discovery
+const body = {
+    customPreset: {
+        auctionDuration: 600, // 10 minutes
+        auctionStartAmount: '10000000000000000000', // 10 ETH
+        auctionEndAmount: '9500000000000000000'      // 9.5 ETH minimum
+    }
+}
+```
+
+### Time-Sensitive Trades
+
+```typescript
+// Quick auction with smaller price range
+const body = {
+    customPreset: {
+        auctionDuration: 60,  // 1 minute
+        auctionStartAmount: '1000000000', // 1000 USDC
+        auctionEndAmount: '990000000'      // 990 USDC
+    }
+}
+```
+
+### Market Making
+
+```typescript
+// Tight spread with fast execution
+const body = {
+    customPreset: {
+        auctionDuration: 30,
+        auctionStartAmount: '1000000000000000000',
+        auctionEndAmount: '999000000000000000',
+        points: [
+            { toTokenAmount: '999500000000000000', delay: 10 }
+        ]
+    }
+}
+```
+
+## Validation
+
+<Warning>
+Invalid preset parameters will cause the API request to fail. Validate before submitting.
+</Warning>
+
+Common validation errors:
+
+```typescript
+// ✗ Invalid: Start amount less than end amount
+auctionStartAmount: '100000',
+auctionEndAmount: '200000' // Error!
+
+// ✗ Invalid: Non-integer duration
+auctionDuration: 180.5 // Error!
+
+// ✗ Invalid: Point outside range
+points: [
+    { toTokenAmount: '300000', delay: 20 } // Greater than start amount!
+]
+
+// ✗ Invalid: Non-numeric amount
+auctionStartAmount: 'invalid' // Error!
+```
+
+## Testing Custom Presets
+
+<Tip>
+Test custom presets with small amounts first to understand how they affect execution.
+</Tip>
+
+```typescript
+// Test with a small amount
+const testParams = {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000', // Just 1 DAI for testing
+    walletAddress: '0x...'
+}
+
+const testPreset = {
+    customPreset: {
+        auctionDuration: 120,
+        auctionStartAmount: '500000000000000', // Small amounts
+        auctionEndAmount: '480000000000000'
+    }
+}
+
+const quote = await sdk.getQuoteWithCustomPreset(testParams, testPreset)
+console.log('Test quote received:', quote)
+```
+
+## Best Practices
+
+1. **Start Conservative**: Begin with longer durations and wider price ranges
+2. **Monitor Results**: Track fill times and prices to optimize presets
+3. **Consider Market Conditions**: Adjust durations based on volatility
+4. **Use Points Sparingly**: Simple linear curves often work best
+5. **Test Thoroughly**: Validate parameters before production use
+
+## Next Steps
+
+- Learn about [Order Management](/guides/order-management) to track custom orders
+- Add [Integrator Fees](/guides/integrator-fees) to your custom orders
+- Use [WebSocket Integration](/guides/websocket-integration) for real-time auction monitoring

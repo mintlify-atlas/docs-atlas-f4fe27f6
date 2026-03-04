@@ -1,0 +1,490 @@
+---
+title: "FusionOrder"
+description: "Create and manage Fusion orders with auction details and whitelist"
+---
+
+## Overview
+
+The `FusionOrder` class represents a Fusion swap order with Dutch auction pricing and resolver whitelisting capabilities. It extends the limit order protocol with time-based pricing curves and access control.
+
+## Constructor
+
+### FusionOrder.new()
+
+Creates a new FusionOrder instance.
+
+<ParamField path="settlementExtension" type="Address" required>
+  Fusion extension contract address. See [limit-order-settlement](https://github.com/1inch/limit-order-settlement)
+</ParamField>
+
+<ParamField path="orderInfo" type="OrderInfoData" required>
+  Basic order parameters
+  
+  <ParamField path="makerAsset" type="Address" required>
+    Token address to sell
+  </ParamField>
+  
+  <ParamField path="takerAsset" type="Address" required>
+    Token address to buy
+  </ParamField>
+  
+  <ParamField path="makingAmount" type="bigint" required>
+    Amount of maker asset to sell
+  </ParamField>
+  
+  <ParamField path="takingAmount" type="bigint" required>
+    Minimum amount of taker asset to receive
+  </ParamField>
+  
+  <ParamField path="maker" type="Address" required>
+    Order creator's wallet address
+  </ParamField>
+  
+  <ParamField path="receiver" type="Address">
+    Recipient address for filled orders (defaults to maker)
+  </ParamField>
+  
+  <ParamField path="salt" type="bigint">
+    Random value for order uniqueness
+  </ParamField>
+</ParamField>
+
+<ParamField path="details" type="Details" required>
+  Auction configuration
+  
+  <ParamField path="auction" type="AuctionDetails" required>
+    Auction pricing parameters. See [AuctionDetails](/api/auction-details)
+  </ParamField>
+  
+  <ParamField path="whitelist" type="Whitelist" required>
+    Resolver access control. See [Whitelist](/api/whitelist)
+  </ParamField>
+  
+  <ParamField path="surplus" type="SurplusParams">
+    Surplus fee configuration (default: NO_FEE)
+  </ParamField>
+</ParamField>
+
+<ParamField path="extra" type="Extra">
+  Additional order options
+  
+  <ParamField path="allowPartialFills" type="boolean" default="true">
+    Allow order to be filled in multiple transactions
+  </ParamField>
+  
+  <ParamField path="allowMultipleFills" type="boolean" default="true">
+    Allow order to be filled by multiple resolvers
+  </ParamField>
+  
+  <ParamField path="unwrapWETH" type="boolean" default="false">
+    Automatically unwrap WETH to native ETH
+  </ParamField>
+  
+  <ParamField path="enablePermit2" type="boolean" default="false">
+    Use Permit2 for token approvals
+  </ParamField>
+  
+  <ParamField path="orderExpirationDelay" type="bigint" default="12n">
+    Seconds after auction ends before order expires
+  </ParamField>
+  
+  <ParamField path="nonce" type="bigint">
+    Required if partial or multiple fills disabled (max 40 bits)
+  </ParamField>
+  
+  <ParamField path="permit" type="string">
+    Permit signature for gasless approvals
+  </ParamField>
+  
+  <ParamField path="source" type="string">
+    Source tracking identifier
+  </ParamField>
+  
+  <ParamField path="fees" type="Fees">
+    Integrator and resolver fee configuration
+  </ParamField>
+  
+  <ParamField path="optimizeReceiverAddress" type="boolean" default="true">
+    Use zero address when maker equals receiver to save gas
+  </ParamField>
+</ParamField>
+
+## Methods
+
+### build()
+
+Builds the final order struct for submission.
+
+```typescript
+const builtOrder = order.build()
+```
+
+<ResponseField name="return" type="LimitOrderV4Struct">
+  Order struct with maker, makerAsset, makingAmount, receiver, takerAsset, takingAmount, makerTraits, and salt
+</ResponseField>
+
+### getOrderHash()
+
+Computes the EIP-712 order hash.
+
+<ParamField path="chainId" type="number" required>
+  Network chain ID (e.g., 1 for Ethereum mainnet)
+</ParamField>
+
+```typescript
+const hash = order.getOrderHash(1)
+```
+
+<ResponseField name="return" type="string">
+  Order hash for signing
+</ResponseField>
+
+### getTypedData()
+
+Generates EIP-712 typed data for wallet signatures.
+
+<ParamField path="chainId" type="number" required>
+  Network chain ID
+</ParamField>
+
+```typescript
+const typedData = order.getTypedData(1)
+```
+
+<ResponseField name="return" type="EIP712TypedData">
+  Typed data object for signing
+</ResponseField>
+
+### calcTakingAmount()
+
+Calculates the required taking amount at a specific time considering auction dynamics.
+
+<ParamField path="taker" type="Address" required>
+  Resolver address filling the order
+</ParamField>
+
+<ParamField path="makingAmount" type="bigint" required>
+  Amount of maker asset being filled
+</ParamField>
+
+<ParamField path="time" type="bigint" required>
+  Execution timestamp (Unix seconds)
+</ParamField>
+
+<ParamField path="blockBaseFee" type="bigint" default="0n">
+  Block base fee in wei
+</ParamField>
+
+```typescript
+const takingAmount = order.calcTakingAmount(
+  resolverAddress,
+  1000000000000000000n,
+  1673548200n
+)
+```
+
+<ResponseField name="return" type="bigint">
+  Taking amount including auction adjustments and fees
+</ResponseField>
+
+### getUserReceiveAmount()
+
+Calculates how much the user will receive after fees.
+
+<ParamField path="taker" type="Address" required>
+  Resolver address
+</ParamField>
+
+<ParamField path="makingAmount" type="bigint" required>
+  Amount of maker asset
+</ParamField>
+
+<ParamField path="time" type="bigint" required>
+  Execution timestamp (Unix seconds)
+</ParamField>
+
+<ParamField path="blockBaseFee" type="bigint" default="0n">
+  Block base fee in wei
+</ParamField>
+
+```typescript
+const userReceives = order.getUserReceiveAmount(
+  resolverAddress,
+  1000000000000000000n,
+  1673548200n
+)
+```
+
+<ResponseField name="return" type="bigint">
+  Net amount user receives in taker asset
+</ResponseField>
+
+### canExecuteAt()
+
+Checks if an address can resolve the order at a given time.
+
+<ParamField path="executor" type="Address" required>
+  Resolver address to check
+</ParamField>
+
+<ParamField path="executionTime" type="bigint" required>
+  Timestamp to check (Unix seconds)
+</ParamField>
+
+```typescript
+const canExecute = order.canExecuteAt(resolverAddress, 1673548200n)
+```
+
+<ResponseField name="return" type="boolean">
+  True if executor can fill at that time
+</ResponseField>
+
+### isExclusiveResolver()
+
+Checks if a wallet has exclusive first-fill rights.
+
+<ParamField path="wallet" type="Address" required>
+  Resolver address to check
+</ParamField>
+
+```typescript
+const isExclusive = order.isExclusiveResolver(resolverAddress)
+```
+
+<ResponseField name="return" type="boolean">
+  True if wallet has exclusive access period
+</ResponseField>
+
+### isExclusivityPeriod()
+
+Checks if the auction is in the exclusivity period.
+
+<ParamField path="time" type="bigint">
+  Timestamp to check (defaults to now)
+</ParamField>
+
+```typescript
+const isExclusive = order.isExclusivityPeriod()
+```
+
+<ResponseField name="return" type="boolean">
+  True if in exclusivity period
+</ResponseField>
+
+### isExpiredAt()
+
+Checks if the order has expired.
+
+<ParamField path="time" type="bigint" required>
+  Timestamp to check (Unix seconds)
+</ParamField>
+
+```typescript
+const expired = order.isExpiredAt(1673548300n)
+```
+
+<ResponseField name="return" type="boolean">
+  True if order is expired
+</ResponseField>
+
+## Properties
+
+<ResponseField name="maker" type="Address">
+  Order creator address
+</ResponseField>
+
+<ResponseField name="makerAsset" type="Address">
+  Token being sold
+</ResponseField>
+
+<ResponseField name="takerAsset" type="Address">
+  Token being bought
+</ResponseField>
+
+<ResponseField name="makingAmount" type="bigint">
+  Amount of maker asset
+</ResponseField>
+
+<ResponseField name="takingAmount" type="bigint">
+  Amount of taker asset
+</ResponseField>
+
+<ResponseField name="receiver" type="Address">
+  Receiver from order struct (may be optimized to zero address)
+</ResponseField>
+
+<ResponseField name="realReceiver" type="Address">
+  Actual recipient of funds (resolves zero address to maker)
+</ResponseField>
+
+<ResponseField name="deadline" type="bigint">
+  Order expiration timestamp (Unix seconds)
+</ResponseField>
+
+<ResponseField name="auctionStartTime" type="bigint">
+  Auction start timestamp (Unix seconds)
+</ResponseField>
+
+<ResponseField name="auctionEndTime" type="bigint">
+  Auction end timestamp (Unix seconds)
+</ResponseField>
+
+<ResponseField name="extension" type="Extension">
+  Encoded extension data
+</ResponseField>
+
+<ResponseField name="partialFillAllowed" type="boolean">
+  Whether partial fills are enabled
+</ResponseField>
+
+<ResponseField name="multipleFillsAllowed" type="boolean">
+  Whether multiple fills are enabled
+</ResponseField>
+
+<ResponseField name="nonce" type="bigint">
+  Order nonce value
+</ResponseField>
+
+<ResponseField name="salt" type="bigint">
+  Order salt value
+</ResponseField>
+
+## Example
+
+```typescript
+import {AuctionDetails, FusionOrder, Whitelist, now, Address} from '@1inch/fusion-sdk'
+
+const extensionContract = new Address('0x8273f37417da37c4a6c3995e82cf442f87a25d9c')
+const resolvingStartAt = now()
+
+const order = FusionOrder.new(
+    extensionContract,
+    {
+        makerAsset: new Address('0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'),
+        takerAsset: new Address('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'),
+        makingAmount: 1000000000000000000n,
+        takingAmount: 1420000000n,
+        maker: new Address('0x00000000219ab540356cbb839cbe05303d7705fa'),
+        salt: 10n
+    },
+    {
+        auction: new AuctionDetails({
+            duration: 180n,
+            startTime: 1673548149n,
+            initialRateBump: 50000,
+            points: [
+                {
+                    coefficient: 20000,
+                    delay: 12
+                }
+            ]
+        }),
+        whitelist: Whitelist.new(resolvingStartAt, [
+            {
+                address: new Address(
+                    '0x00000000219ab540356cbb839cbe05303d7705fa'
+                ),
+                allowFrom: resolvingStartAt
+            }
+        ])
+    }
+)
+
+const extension = order.extension.encode() // => 0x...
+const builtOrder = order.build()
+/* => {
+        maker: '0x00000000219ab540356cbb839cbe05303d7705fa',
+        makerAsset: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+        makingAmount: '1000000000000000000',
+        receiver: '0x0000000000000000000000000000000000000000',
+        takerAsset: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+        takingAmount: '1420000000',
+        makerTraits:
+            '29852648006495581632639394572552351243421169944806257724550573036760110989312',
+        salt: '14832508939800728556409473652845244531014097925085'
+    }
+*/
+```
+
+## Static Methods
+
+### fromNative()
+
+Creates an order from native asset (ETH). Such orders must be submitted on-chain via `ETHOrders.depositForOrder` and off-chain to the relayer.
+
+<ParamField path="chainId" type="NetworkEnum" required>
+  Network ID
+</ParamField>
+
+<ParamField path="ethOrdersFactory" type="ProxyFactory" required>
+  ETHOrders proxy factory
+</ParamField>
+
+<ParamField path="settlementExtension" type="Address" required>
+  Fusion extension contract
+</ParamField>
+
+<ParamField path="orderInfo" type="Omit<OrderInfoData, 'makerAsset'>" required>
+  Order info without makerAsset (automatically set to WETH)
+</ParamField>
+
+<ParamField path="details" type="Details" required>
+  Auction details and whitelist
+</ParamField>
+
+<ParamField path="extra" type="Extra">
+  Additional options
+</ParamField>
+
+### fromDataAndExtension()
+
+Reconstructs a FusionOrder from order struct and extension data.
+
+<ParamField path="order" type="LimitOrderV4Struct" required>
+  Order struct data
+</ParamField>
+
+<ParamField path="extension" type="Extension" required>
+  Extension bytes
+</ParamField>
+
+```typescript
+const order = FusionOrder.fromDataAndExtension(orderStruct, extension)
+```
+
+<ResponseField name="return" type="FusionOrder">
+  Reconstructed FusionOrder instance
+</ResponseField>
+
+### isNativeOrder()
+
+Checks if an order was created from native asset.
+
+<ParamField path="chainId" type="number" required>
+  Network chain ID
+</ParamField>
+
+<ParamField path="ethOrderFactory" type="ProxyFactory" required>
+  ETHOrders factory
+</ParamField>
+
+<ParamField path="order" type="LimitOrderV4Struct" required>
+  Order to check
+</ParamField>
+
+<ParamField path="signature" type="string" required>
+  Order signature
+</ParamField>
+
+```typescript
+const isNative = FusionOrder.isNativeOrder(
+  1,
+  ethOrdersFactory,
+  orderStruct,
+  signature
+)
+```
+
+<ResponseField name="return" type="boolean">
+  True if order is from native asset
+</ResponseField>

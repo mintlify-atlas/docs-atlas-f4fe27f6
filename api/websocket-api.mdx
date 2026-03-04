@@ -1,0 +1,431 @@
+---
+title: WebSocketApi
+description: WebSocket API for real-time order events and data streaming
+---
+
+The `WebSocketApi` class provides real-time connectivity to the 1inch Fusion Mode WebSocket API for streaming order events and performing RPC calls.
+
+## Constructor
+
+Creates a new WebSocket API instance.
+
+```typescript
+const ws = new WebSocketApi(config)
+```
+
+<ParamField path="config" type="WsApiConfigWithNetwork | WsProviderConnector" required>
+  Configuration object or custom WebSocket provider
+  
+  <ParamField path="config.url" type="string" required>
+    WebSocket endpoint URL (e.g., `wss://api.1inch.dev/fusion/ws`)
+  </ParamField>
+  
+  <ParamField path="config.network" type="NetworkEnum" required>
+    Network to connect to (e.g., `NetworkEnum.ETHEREUM`)
+  </ParamField>
+  
+  <ParamField path="config.authKey" type="string">
+    Authentication key for API access
+  </ParamField>
+  
+  <ParamField path="config.lazyInit" type="boolean">
+    Defer connection until `init()` is called (default: false)
+  </ParamField>
+</ParamField>
+
+## Static Methods
+
+### new
+
+Alternative factory method for creating a WebSocket API instance.
+
+```typescript
+const ws = WebSocketApi.new(config)
+```
+
+## Base Methods
+
+### init
+
+Manually initializes the WebSocket connection (when `lazyInit: true`).
+
+```typescript
+ws.init()
+```
+
+### on
+
+Subscribes to a WebSocket event.
+
+```typescript
+ws.on('message', (data) => {
+  console.log('Received:', data)
+})
+```
+
+<ParamField path="event" type="string" required>
+  Event name to subscribe to
+</ParamField>
+
+<ParamField path="callback" type="Function" required>
+  Callback function to handle the event
+</ParamField>
+
+### off
+
+Unsubscribes from a WebSocket event.
+
+```typescript
+const handler = (data) => console.log(data)
+ws.on('message', handler)
+ws.off('message', handler)
+```
+
+<ParamField path="event" type="string" required>
+  Event name to unsubscribe from
+</ParamField>
+
+<ParamField path="callback" type="Function" required>
+  Callback function to remove
+</ParamField>
+
+### onOpen
+
+Subscribes to the connection open event.
+
+```typescript
+ws.onOpen(() => {
+  console.log('Connection opened')
+})
+```
+
+<ParamField path="callback" type="Function" required>
+  Callback function called when connection opens
+</ParamField>
+
+### onMessage
+
+Subscribes to incoming messages.
+
+```typescript
+ws.onMessage((data) => {
+  console.log('Message:', data)
+})
+```
+
+<ParamField path="callback" type="(data: any) => void" required>
+  Callback function to handle messages
+</ParamField>
+
+### onClose
+
+Subscribes to the connection close event.
+
+```typescript
+ws.onClose(() => {
+  console.log('Connection closed')
+})
+```
+
+<ParamField path="callback" type="Function" required>
+  Callback function called when connection closes
+</ParamField>
+
+### onError
+
+Subscribes to error events.
+
+```typescript
+ws.onError((error) => {
+  console.error('WebSocket error:', error)
+})
+```
+
+<ParamField path="callback" type="(error: any) => void" required>
+  Callback function to handle errors
+</ParamField>
+
+### send
+
+Sends a message through the WebSocket connection.
+
+```typescript
+ws.send({ type: 'ping' })
+```
+
+<ParamField path="message" type="any" required>
+  Message to send (will be JSON serialized)
+</ParamField>
+
+### close
+
+Closes the WebSocket connection.
+
+```typescript
+ws.close()
+```
+
+## Order Namespace
+
+The `order` namespace provides methods for subscribing to order-related events.
+
+### onOrder
+
+Subscribes to all order events.
+
+```typescript
+ws.order.onOrder((data) => {
+  if (data.event === 'order_created') {
+    console.log('New order:', data)
+  }
+  if (data.event === 'order_filled') {
+    console.log('Order filled:', data)
+  }
+})
+```
+
+<ParamField path="callback" type="(data: OrderEventType) => void" required>
+  Callback function receiving order events
+</ParamField>
+
+### onOrderCreated
+
+Subscribes to order creation events.
+
+```typescript
+ws.order.onOrderCreated((data) => {
+  console.log('Order created:', data.data.orderHash)
+})
+```
+
+<ParamField path="callback" type="(data: OrderCreatedEvent) => void" required>
+  Callback function receiving `order_created` events
+</ParamField>
+
+**Event Data:**
+- `orderHash` - Order hash
+- `signature` - Order signature
+- `order` - Order structure
+- `deadline` - Order deadline
+- `auctionStartDate` - Auction start timestamp
+- `auctionEndDate` - Auction end timestamp
+- `remainingMakerAmount` - Remaining maker amount
+
+### onOrderInvalid
+
+Subscribes to order invalidation events.
+
+```typescript
+ws.order.onOrderInvalid((data) => {
+  console.log('Order invalid:', data.data.orderHash)
+})
+```
+
+<ParamField path="callback" type="(data: OrderInvalidEvent) => void" required>
+  Callback function receiving `order_invalid` events
+</ParamField>
+
+**Event Data:**
+- `orderHash` - Order hash that became invalid
+
+### onOrderBalanceOrAllowanceChange
+
+Subscribes to balance or allowance change events.
+
+```typescript
+ws.order.onOrderBalanceOrAllowanceChange((data) => {
+  console.log('Balance/Allowance changed:', data.data)
+})
+```
+
+<ParamField path="callback" type="(data: OrderBalanceOrAllowanceChangeEvent) => void" required>
+  Callback function receiving `order_balance_or_allowance_change` events
+</ParamField>
+
+**Event Data:**
+- `orderHash` - Order hash
+- `remainingMakerAmount` - Remaining maker amount
+- `balance` - Current balance
+- `allowance` - Current allowance
+
+### onOrderFilled
+
+Subscribes to order filled events.
+
+```typescript
+ws.order.onOrderFilled((data) => {
+  console.log('Order filled:', data.data.orderHash)
+})
+```
+
+<ParamField path="callback" type="(data: OrderFilledEvent) => void" required>
+  Callback function receiving `order_filled` events
+</ParamField>
+
+**Event Data:**
+- `orderHash` - Order hash that was filled
+
+### onOrderFilledPartially
+
+Subscribes to partial fill events.
+
+```typescript
+ws.order.onOrderFilledPartially((data) => {
+  console.log('Partial fill:', data.data.remainingMakerAmount)
+})
+```
+
+<ParamField path="callback" type="(data: OrderFilledPartiallyEvent) => void" required>
+  Callback function receiving `order_filled_partially` events
+</ParamField>
+
+**Event Data:**
+- `orderHash` - Order hash
+- `remainingMakerAmount` - Amount remaining after partial fill
+
+### onOrderCancelled
+
+Subscribes to order cancellation events.
+
+```typescript
+ws.order.onOrderCancelled((data) => {
+  console.log('Order cancelled:', data.data.orderHash)
+})
+```
+
+<ParamField path="callback" type="(data: OrderCancelledEvent) => void" required>
+  Callback function receiving `order_cancelled` events
+</ParamField>
+
+**Event Data:**
+- `orderHash` - Order hash that was cancelled
+
+## RPC Namespace
+
+The `rpc` namespace provides methods for making RPC calls and receiving responses.
+
+### ping
+
+Sends a ping request for health checking.
+
+```typescript
+ws.rpc.ping()
+```
+
+### onPong
+
+Subscribes to ping responses.
+
+```typescript
+ws.rpc.onPong((data) => {
+  console.log('Pong received:', data)
+})
+```
+
+<ParamField path="callback" type="(data: string) => void" required>
+  Callback function receiving pong responses
+</ParamField>
+
+### getAllowedMethods
+
+Requests the list of allowed RPC methods.
+
+```typescript
+ws.rpc.getAllowedMethods()
+```
+
+### onGetAllowedMethods
+
+Subscribes to allowed methods responses.
+
+```typescript
+ws.rpc.onGetAllowedMethods((methods) => {
+  console.log('Allowed methods:', methods)
+})
+```
+
+<ParamField path="callback" type="(data: RpcMethod[]) => void" required>
+  Callback function receiving the list of allowed methods
+</ParamField>
+
+### getActiveOrders
+
+Requests the list of active orders via WebSocket.
+
+```typescript
+ws.rpc.getActiveOrders()
+```
+
+### onGetActiveOrders
+
+Subscribes to active orders responses.
+
+```typescript
+ws.rpc.onGetActiveOrders((data) => {
+  console.log('Active orders:', data.items)
+})
+```
+
+<ParamField path="callback" type="(data: PaginationOutput<ActiveOrder>) => void" required>
+  Callback function receiving active orders data
+</ParamField>
+
+## Types
+
+### OrderEventType
+
+Union type of all order events:
+- `OrderCreatedEvent` - Order created
+- `OrderInvalidEvent` - Order became invalid
+- `OrderBalanceOrAllowanceChangeEvent` - Balance or allowance changed
+- `OrderFilledEvent` - Order fully filled
+- `OrderFilledPartiallyEvent` - Order partially filled
+- `OrderCancelledEvent` - Order cancelled
+
+### RpcMethod
+
+Allowed RPC methods:
+- `getAllowedMethods`
+- `ping`
+
+## Example
+
+```typescript
+import { WebSocketApi, NetworkEnum } from '@1inch/fusion-sdk'
+
+// Create WebSocket instance
+const ws = new WebSocketApi({
+  url: 'wss://api.1inch.dev/fusion/ws',
+  network: NetworkEnum.ETHEREUM,
+  authKey: 'your-auth-key'
+})
+
+// Subscribe to order events
+ws.order.onOrderCreated((data) => {
+  console.log('New order created:', data.data.orderHash)
+})
+
+ws.order.onOrderFilled((data) => {
+  console.log('Order filled:', data.data.orderHash)
+})
+
+// Handle connection events
+ws.onOpen(() => {
+  console.log('Connected to WebSocket')
+  ws.rpc.ping()
+})
+
+ws.onError((error) => {
+  console.error('WebSocket error:', error)
+})
+
+// Lazy initialization example
+const lazyWs = new WebSocketApi({
+  url: 'wss://api.1inch.dev/fusion/ws',
+  network: NetworkEnum.ETHEREUM,
+  lazyInit: true
+})
+
+// Connect when ready
+lazyWs.init()
+```

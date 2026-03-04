@@ -1,0 +1,345 @@
+---
+title: Auction mechanics
+description: Understanding Dutch auctions, price curves, and auction configuration in Fusion Mode
+---
+
+## Dutch auction fundamentals
+
+Fusion Mode uses a **Dutch auction** mechanism where the acceptable execution price starts high and gradually decreases over time. This creates a competitive environment where resolvers must balance getting the best profit margin against the risk of being outbid.
+
+### Price curve anatomy
+
+Every Fusion auction has three key components:
+
+1. **Auction start amount**: The initial (most favorable to resolvers) price
+2. **Auction end amount**: The final (minimum acceptable to you) price
+3. **Duration**: How long the auction runs before expiration
+
+```
+Price (output tokens)
+│
+│ ● Auction start (high)
+│  \
+│   \
+│    \
+│     \____
+│          \
+│           \
+│            ● Auction end (your minimum)
+│
+└─────────────────────────► Time
+  0s        60s       120s
+```
+
+## Rate bumps and scaling
+
+The SDK uses a **rate bump** system to define price curves. A rate bump is a multiplier applied to the base amount, where:
+
+- `10,000,000` = 100% (no change)
+- `10,500,000` = 105% (5% increase)
+- `9,500,000` = 95% (5% decrease)
+
+<Note>
+All rate bumps use a denominator of 10,000,000 for precise percentage calculations.
+</Note>
+
+### Initial rate bump
+
+The **initial rate bump** defines how much better the auction start price is compared to the auction end price:
+
+```typescript
+import { AuctionCalculator } from '@1inch/fusion-sdk'
+
+// If your minimum acceptable output is 1000 USDC
+// and initial rate bump is 500,000 (5%)
+// then auction starts at 1050 USDC (5% better)
+
+const initialRateBump = 500000 // 5%
+const endAmount = 1000000000n // 1000 USDC (6 decimals)
+
+const startAmount = AuctionCalculator.calcAuctionTakingAmount(
+  endAmount,
+  initialRateBump
+)
+// Result: 1,050,000,000 (1050 USDC)
+```
+
+## Auction points (custom price curves)
+
+For advanced control, you can define custom price curves using **auction points**. Each point specifies:
+
+- **Coefficient**: Rate bump at this point (10,000,000 = 100%)
+- **Delay**: Seconds after the previous point (or auction start for the first point)
+
+### Linear price curve (default)
+
+A simple auction with linear price decay:
+
+```typescript
+import { AuctionDetails } from '@1inch/fusion-sdk'
+
+const auction = new AuctionDetails({
+  startTime: 1673548149n,
+  duration: 180n, // 3 minutes
+  initialRateBump: 500000, // Start 5% above minimum
+  points: [] // Linear decay from start to end
+})
+```
+
+### Non-linear price curve
+
+Create a custom curve with multiple segments:
+
+```typescript
+const auction = new AuctionDetails({
+  startTime: 1673548149n,
+  duration: 180n,
+  initialRateBump: 1000000, // Start 10% above minimum
+  points: [
+    {
+      coefficient: 750000, // 7.5% above minimum
+      delay: 30 // After 30 seconds
+    },
+    {
+      coefficient: 500000, // 5% above minimum
+      delay: 30 // After 60 seconds total
+    },
+    {
+      coefficient: 250000, // 2.5% above minimum
+      delay: 60 // After 120 seconds total
+    }
+    // Remaining 60 seconds: linear decay to 0% (minimum)
+  ]
+})
+```
+
+This creates a stepped curve:
+
+```
+Price
+│
+│ ●────────────────────● (10% for 0-30s)
+│                       \
+│                        ●──────────● (7.5% for 30-60s)
+│                                    \
+│                                     ●──────● (5% for 60-120s)
+│                                             \
+│                                              ●────● (2.5% for 120-180s)
+│                                                    \
+│                                                     ● Minimum
+└────────────────────────────────────────────────────────► Time
+0s    30s        60s         90s    120s    150s    180s
+```
+
+## Gas cost adjustment
+
+Auction pricing can be adjusted to account for gas costs, ensuring resolvers are compensated for on-chain execution:
+
+```typescript
+import { AuctionDetails } from '@1inch/fusion-sdk'
+
+const auction = new AuctionDetails({
+  startTime: 1673548149n,
+  duration: 180n,
+  initialRateBump: 500000,
+  points: [],
+  gasCost: {
+    // Rate bump to cover gas (10,000 = 0.1%)
+    gasBumpEstimate: 10000n,
+    // Gas price at estimation time (1 gwei = 1000)
+    gasPriceEstimate: 50000n // 50 gwei
+  }
+})
+```
+
+The gas cost adjustment dynamically scales based on current network conditions:
+
+- If gas price increases, resolvers get a higher effective rate
+- If gas price decreases, the adjustment shrinks
+- This ensures fair compensation regardless of network congestion
+
+## Using the AuctionCalculator
+
+The `AuctionCalculator` class provides utilities for working with auction mechanics:
+
+```typescript
+import { 
+  AuctionCalculator, 
+  AuctionDetails,
+  SettlementPostInteractionData,
+  Address,
+  bpsToRatioFormat
+} from '@1inch/fusion-sdk'
+
+// Create auction details
+const startTime = 1673548149n
+const details = new AuctionDetails({
+  duration: 180n,
+  startTime,
+  initialRateBump: 500000,
+  points: [
+    { delay: 60, coefficient: 300000 },
+    { delay: 60, coefficient: 150000 }
+  ]
+})
+
+// Create settlement data
+const settlement = SettlementPostInteractionData.new({
+  bankFee: 0n,
+  auctionStartTime: startTime,
+  whitelist: [],
+  integratorFee: {
+    receiver: new Address('0x0000000000000000000000000000000000000000'),
+    ratio: bpsToRatioFormat(0)
+  }
+})
+
+// Initialize calculator
+const calculator = AuctionCalculator.fromAuctionData(settlement, details)
+
+// Calculate rate at specific time
+const currentTime = startTime + 90n // 90 seconds into auction
+const rateBump = calculator.calcRateBump(currentTime)
+console.log('Current rate bump:', rateBump) // ~225000 (interpolated)
+
+// Calculate output amount at current rate
+const minTakingAmount = 1000000000n // 1000 USDC minimum
+const currentAmount = calculator.calcAuctionTakingAmount(
+  minTakingAmount,
+  rateBump
+)
+console.log('Current output:', currentAmount) // ~1022.5 USDC
+```
+
+## Preset configurations
+
+The SDK provides three preset auction configurations optimized for different scenarios:
+
+<Tabs>
+  <Tab title="Fast preset">
+    ```typescript
+    {
+      duration: 60, // 1 minute
+      initialRateBump: 300000, // 3% above minimum
+      points: [
+        { delay: 20, coefficient: 200000 },
+        { delay: 20, coefficient: 100000 }
+      ]
+    }
+    ```
+
+    **Best for**: Time-sensitive swaps, volatile markets
+  </Tab>
+
+  <Tab title="Medium preset">
+    ```typescript
+    {
+      duration: 120, // 2 minutes
+      initialRateBump: 500000, // 5% above minimum
+      points: [
+        { delay: 40, coefficient: 350000 },
+        { delay: 40, coefficient: 175000 }
+      ]
+    }
+    ```
+
+    **Best for**: Most swaps, balanced optimization
+  </Tab>
+
+  <Tab title="Slow preset">
+    ```typescript
+    {
+      duration: 180, // 3 minutes
+      initialRateBump: 800000, // 8% above minimum
+      points: [
+        { delay: 60, coefficient: 600000 },
+        { delay: 60, coefficient: 300000 }
+      ]
+    }
+    ```
+
+    **Best for**: Large swaps, stable markets, maximum optimization
+  </Tab>
+</Tabs>
+
+## Choosing auction parameters
+
+When configuring custom auctions, consider:
+
+### Duration
+
+- **Shorter (60s)**: Faster execution, but less time for competitive bidding
+- **Longer (180s)**: More resolver competition, better pricing, but slower
+- **Recommended**: 120s for most use cases
+
+### Initial rate bump
+
+- **Higher (8-10%)**: Better for resolvers to compete, slower execution
+- **Lower (2-3%)**: Faster execution, but potentially less optimal pricing
+- **Recommended**: 5% for balanced optimization
+
+### Price curve shape
+
+- **Linear**: Simplest, predictable decay
+- **Stepped**: Allows testing different price levels
+- **Custom**: Maximum control for specific strategies
+
+<Warning>
+Setting an initial rate bump too high may result in no resolvers executing until late in the auction. Start with moderate values (3-5%) and adjust based on results.
+</Warning>
+
+## Example: Custom auction configuration
+
+Here's a complete example of creating an order with custom auction parameters:
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  blockchainProvider: connector,
+  authKey: 'your-api-key'
+})
+
+// Define custom auction preset
+const customPreset = {
+  auctionDuration: 150, // 2.5 minutes
+  auctionStartAmount: '1100000000', // 1100 USDC (10% above minimum)
+  auctionEndAmount: '1000000000',   // 1000 USDC (your minimum)
+  points: [
+    { delay: 50, toTokenAmount: '1075000000' }, // 1075 USDC at 50s
+    { delay: 50, toTokenAmount: '1025000000' }  // 1025 USDC at 100s
+  ]
+}
+
+// Get quote with custom preset
+const quote = await sdk.getQuoteWithCustomPreset(
+  {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    amount: '1000000000000000000000',
+    walletAddress: '0xYourAddress'
+  },
+  { customPreset }
+)
+
+console.log('Custom auction configured:', quote)
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Order lifecycle" icon="rotate" href="/concepts/order-lifecycle">
+    Learn how orders progress through different states
+  </Card>
+  <Card title="Custom presets guide" icon="sliders" href="/guides/custom-presets">
+    Step-by-step guide to configuring custom auctions
+  </Card>
+  <Card title="AuctionDetails API" icon="code" href="/api/auction-details">
+    Complete API reference for auction configuration
+  </Card>
+  <Card title="AuctionCalculator API" icon="calculator" href="/api/auction-calculator">
+    Utilities for auction calculations
+  </Card>
+</CardGroup>

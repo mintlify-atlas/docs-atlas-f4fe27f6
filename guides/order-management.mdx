@@ -1,0 +1,450 @@
+---
+title: 'Order Management'
+description: 'Check order status, monitor fills, and cancel orders'
+---
+
+## Overview
+
+The 1inch Fusion SDK provides comprehensive tools for managing orders after submission. This guide covers checking order status, monitoring fills, and cancelling orders.
+
+## Checking Order Status
+
+Use `getOrderStatus()` to retrieve detailed information about an order:
+
+```typescript
+import { FusionSDK, NetworkEnum, OrderStatus } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const orderHash = '0x...'
+
+const status = await sdk.getOrderStatus(orderHash)
+
+console.log('Order status:', status.status)
+console.log('Fills:', status.fills)
+```
+
+## Order Status Types
+
+The SDK defines several order statuses:
+
+```typescript
+enum OrderStatus {
+    Pending = 'pending',                                    // Order submitted, waiting for fill
+    Filled = 'filled',                                       // Order completely filled
+    PartiallyFilled = 'partially-filled',                   // Order partially filled
+    Expired = 'expired',                                     // Auction ended without fill
+    Cancelled = 'cancelled',                                 // Manually cancelled
+    InvalidSignature = 'invalid-signature',                 // Invalid order signature
+    FalsePredicate = 'false-predicate',                     // Order predicate returned false
+    NotEnoughBalanceOrAllowance = 'not-enough-balance-or-allowance',
+    WrongPermit = 'wrong-permit'                            // Invalid permit signature
+}
+```
+
+## Status Response Details
+
+The `OrderStatusResponse` provides comprehensive information:
+
+```typescript
+type OrderStatusResponse = {
+    status: OrderStatus              // Current order status
+    order: LimitOrderV4Struct        // Order details
+    extension: string                // Extension data
+    points: AuctionPoint[] | null    // Auction price curve points
+    cancelTx: string | null          // Cancellation transaction hash
+    fills: Fill[]                    // Array of fill transactions
+    createdAt: string                // Order creation timestamp
+    auctionStartDate: number         // Auction start time
+    auctionDuration: number          // Auction duration in seconds
+    initialRateBump: number          // Initial rate improvement
+    isNativeCurrency: boolean        // Whether order involves native token
+    fromTokenToUsdPrice: string      // Source token USD price
+    toTokenToUsdPrice: string        // Destination token USD price
+}
+```
+
+## Fill Information
+
+```typescript
+type Fill = {
+    txHash: string                   // Transaction hash of the fill
+    filledMakerAmount: string        // Amount of maker token filled
+    filledAuctionTakerAmount: string // Amount of taker token filled
+    takerFeeAmount: string | null    // Fee paid by taker
+}
+```
+
+## Monitoring Order Execution
+
+### Polling Status
+
+```typescript
+import { FusionSDK, OrderStatus } from '@1inch/fusion-sdk'
+
+async function monitorOrder(sdk: FusionSDK, orderHash: string) {
+    const startTime = Date.now()
+    const maxWaitTime = 300000 // 5 minutes
+
+    while (Date.now() - startTime < maxWaitTime) {
+        try {
+            const data = await sdk.getOrderStatus(orderHash)
+
+            console.log(`Status: ${data.status}`)
+
+            // Check for terminal states
+            if (data.status === OrderStatus.Filled) {
+                console.log('Order filled successfully!')
+                console.log('Fills:', data.fills)
+                return data
+            }
+
+            if (data.status === OrderStatus.Expired) {
+                console.log('Order expired without fill')
+                return data
+            }
+
+            if (data.status === OrderStatus.Cancelled) {
+                console.log('Order was cancelled')
+                return data
+            }
+
+            // Handle error states
+            if (data.status === OrderStatus.InvalidSignature) {
+                console.error('Invalid signature')
+                throw new Error('Order has invalid signature')
+            }
+
+            if (data.status === OrderStatus.NotEnoughBalanceOrAllowance) {
+                console.error('Insufficient balance or allowance')
+                throw new Error('Not enough balance or allowance')
+            }
+
+            // Wait before next check
+            await new Promise(resolve => setTimeout(resolve, 5000))
+
+        } catch (error) {
+            console.error('Error checking status:', error)
+            await new Promise(resolve => setTimeout(resolve, 5000))
+        }
+    }
+
+    throw new Error('Order monitoring timeout')
+}
+
+// Usage
+const orderInfo = await sdk.placeOrder({
+    fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    amount: '1000000000000000000',
+    walletAddress: '0x...'
+})
+
+await monitorOrder(sdk, orderInfo.orderHash)
+```
+
+### WebSocket Monitoring
+
+<Tip>
+For real-time updates, use WebSocket integration instead of polling. See [WebSocket Integration](/guides/websocket-integration).
+</Tip>
+
+```typescript
+import { WebSocketApi, NetworkEnum } from '@1inch/fusion-sdk'
+
+const ws = new WebSocketApi({
+    url: 'wss://api.1inch.dev/fusion/ws',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+ws.order.onOrder((event) => {
+    console.log('Order event:', event.event)
+    console.log('Order hash:', event.data.orderHash)
+})
+```
+
+## Cancelling Orders
+
+### Understanding Order Cancellation
+
+<Note>
+Order cancellation requires an on-chain transaction. The order is cancelled by calling the settlement contract.
+</Note>
+
+To cancel an order, you need:
+1. The order hash
+2. The original order's maker traits
+3. Access to the maker's wallet to sign the cancellation transaction
+
+### Cancellation Process
+
+```typescript
+import { FusionSDK, encodeCancelOrder } from '@1inch/fusion-sdk'
+import { MakerTraits } from '@1inch/limit-order-sdk'
+import { Wallet } from 'ethers'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider: connector,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+// Get order details
+const orderHash = '0x...'
+const orderStatus = await sdk.getOrderStatus(orderHash)
+
+// Encode cancellation
+const makerTraits = MakerTraits.default() // Or use traits from original order
+const cancelData = encodeCancelOrder(orderHash, makerTraits)
+
+// Send cancellation transaction
+const wallet = new Wallet(privateKey, provider)
+const settlementContract = '0x...' // Get from SDK
+
+const tx = await wallet.sendTransaction({
+    to: settlementContract,
+    data: cancelData
+})
+
+await tx.wait()
+
+console.log('Order cancelled in tx:', tx.hash)
+```
+
+## Batch Cancellation
+
+<Tip>
+Use custom nonces to enable batch cancellation of multiple orders with a single transaction.
+</Tip>
+
+```typescript
+// Create orders with the same nonce
+const nonce = 12345n
+
+const order1 = await sdk.placeOrder({
+    fromTokenAddress: '0x...',
+    toTokenAddress: '0x...',
+    amount: '1000000000000000000',
+    walletAddress: makerAddress,
+    nonce: nonce // Same nonce
+})
+
+const order2 = await sdk.placeOrder({
+    fromTokenAddress: '0x...',
+    toTokenAddress: '0x...',
+    amount: '2000000000000000000',
+    walletAddress: makerAddress,
+    nonce: nonce // Same nonce
+})
+
+// Cancel all orders with this nonce in one transaction
+// Use nonce-based cancellation mechanism
+```
+
+## Querying Orders by Maker
+
+Retrieve all orders for a specific wallet address:
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+const orders = await sdk.getOrdersByMaker({
+    address: '0xfa80cd9b3becc0b4403b0f421384724f2810775f',
+    page: 1,
+    limit: 10
+})
+
+console.log(`Found ${orders.items.length} orders`)
+console.log(`Total: ${orders.meta.totalItems}`)
+
+orders.items.forEach(order => {
+    console.log(`Order ${order.orderHash}:`, order.status)
+})
+```
+
+## Getting Active Orders
+
+Retrieve all currently active orders on the network:
+
+```typescript
+const activeOrders = await sdk.getActiveOrders({
+    page: 1,
+    limit: 50
+})
+
+console.log(`Active orders: ${activeOrders.items.length}`)
+
+activeOrders.items.forEach(order => {
+    console.log(`Order: ${order.orderHash}`)
+    console.log(`Auction ends: ${new Date(parseInt(order.auctionEndDate) * 1000)}`)
+})
+```
+
+## Pagination
+
+```typescript
+type PaginationParams = {
+    page?: number   // Default: 1
+    limit?: number  // Default: 2, min: 1, max: 500
+}
+
+type PaginationOutput<T> = {
+    items: T[]
+    meta: {
+        currentPage: number
+        itemsPerPage: number
+        totalItems: number
+        totalPages: number
+    }
+}
+```
+
+### Paginating Through Results
+
+```typescript
+async function getAllOrdersForMaker(sdk: FusionSDK, address: string) {
+    const allOrders = []
+    let page = 1
+    const limit = 100
+
+    while (true) {
+        const response = await sdk.getOrdersByMaker({
+            address,
+            page,
+            limit
+        })
+
+        allOrders.push(...response.items)
+
+        if (page >= response.meta.totalPages) {
+            break
+        }
+
+        page++
+    }
+
+    return allOrders
+}
+```
+
+## Best Practices
+
+### Status Monitoring
+
+1. **Use Appropriate Intervals**: Poll every 5-10 seconds to avoid rate limits
+2. **Handle Errors Gracefully**: Network issues shouldn't crash your application
+3. **Set Timeouts**: Don't monitor indefinitely; set reasonable time limits
+4. **Consider WebSockets**: Use WebSocket API for real-time updates
+
+### Order Cancellation
+
+<Warning>
+Cancellation requires an on-chain transaction and gas fees. Orders also expire automatically after the auction ends.
+</Warning>
+
+1. **Check Status First**: Verify order hasn't already been filled
+2. **Handle Transaction Failures**: Cancellation transactions can fail
+3. **Wait for Confirmation**: Ensure cancellation is confirmed on-chain
+4. **Use Batch Cancellation**: Cancel multiple orders efficiently with nonces
+
+### Error Handling
+
+```typescript
+try {
+    const status = await sdk.getOrderStatus(orderHash)
+    
+    if (status.status === OrderStatus.NotEnoughBalanceOrAllowance) {
+        console.error('Order failed: insufficient balance or allowance')
+        // Handle: notify user, update UI, etc.
+    }
+    
+    if (status.status === OrderStatus.InvalidSignature) {
+        console.error('Order failed: invalid signature')
+        // Handle: this shouldn't happen; log for debugging
+    }
+    
+} catch (error) {
+    if (error.response?.status === 404) {
+        console.error('Order not found')
+    } else {
+        console.error('Failed to get order status:', error.message)
+    }
+}
+```
+
+## Complete Example
+
+```typescript
+import { FusionSDK, NetworkEnum, OrderStatus } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider: connector,
+    authKey: 'YOUR_DEV_PORTAL_API_TOKEN'
+})
+
+async function placeAndMonitorOrder() {
+    try {
+        // Place order
+        const orderInfo = await sdk.placeOrder({
+            fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+            toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+            amount: '1000000000000000000',
+            walletAddress: makerAddress
+        })
+
+        console.log('Order placed:', orderInfo.orderHash)
+
+        // Monitor order
+        const startTime = Date.now()
+
+        while (true) {
+            const status = await sdk.getOrderStatus(orderInfo.orderHash)
+
+            if (status.status === OrderStatus.Filled) {
+                console.log('Order filled!')
+                console.log('Execution time:', (Date.now() - startTime) / 1000, 'seconds')
+                console.log('Fills:', status.fills)
+                break
+            }
+
+            if (status.status === OrderStatus.Expired) {
+                console.log('Order expired without fill')
+                break
+            }
+
+            if (status.status === OrderStatus.Cancelled) {
+                console.log('Order was cancelled')
+                break
+            }
+
+            // Wait 5 seconds before next check
+            await new Promise(resolve => setTimeout(resolve, 5000))
+        }
+
+    } catch (error) {
+        console.error('Error:', error.message)
+    }
+}
+
+placeAndMonitorOrder()
+```
+
+## Next Steps
+
+- Use [WebSocket Integration](/guides/websocket-integration) for real-time order updates
+- Learn about [Integrator Fees](/guides/integrator-fees) to monetize order flow
+- Explore [Custom Presets](/guides/custom-presets) for advanced order control

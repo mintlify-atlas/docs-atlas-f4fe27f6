@@ -1,0 +1,262 @@
+---
+title: "AuctionCalculator"
+description: "Calculate taker amounts and auction rates for Fusion orders"
+---
+
+## Overview
+
+The `AuctionCalculator` class is used to calculate taker amounts and auction rates during the lifecycle of a Fusion order. It helps determine how the exchange rate changes over time during the Dutch auction process.
+
+## Constructor
+
+<ParamField path="startTime" type="bigint" required>
+  Auction start time as Unix timestamp in seconds
+</ParamField>
+
+<ParamField path="duration" type="bigint" required>
+  Auction duration in seconds
+</ParamField>
+
+<ParamField path="initialRateBump" type="bigint" required>
+  Initial rate bump from the end price (where 10,000,000 = 100%)
+</ParamField>
+
+<ParamField path="points" type="AuctionPoint[]" required>
+  Array of auction points defining the rate curve
+</ParamField>
+
+<ParamField path="gasCost" type="AuctionGasCostInfo">
+  Optional gas cost information for dynamic rate adjustments
+</ParamField>
+
+## Static Methods
+
+### fromAuctionData
+
+Create an `AuctionCalculator` instance from `AuctionDetails`.
+
+```typescript
+static fromAuctionData(details: AuctionDetails): AuctionCalculator
+```
+
+<ParamField path="details" type="AuctionDetails" required>
+  Auction details containing start time, duration, rate bump, and points
+</ParamField>
+
+<ResponseField name="AuctionCalculator">
+  Returns a new AuctionCalculator instance
+</ResponseField>
+
+### calcInitialRateBump
+
+Calculate the initial rate bump given start and end amounts.
+
+```typescript
+static calcInitialRateBump(startAmount: bigint, endAmount: bigint): number
+```
+
+<ParamField path="startAmount" type="bigint" required>
+  Starting amount for the auction
+</ParamField>
+
+<ParamField path="endAmount" type="bigint" required>
+  Ending amount for the auction
+</ParamField>
+
+<ResponseField name="number">
+  The initial rate bump value
+</ResponseField>
+
+### calcAuctionTakingAmount
+
+Calculate the taking amount for a given rate (static version).
+
+```typescript
+static calcAuctionTakingAmount(takingAmount: bigint, rate: number): bigint
+```
+
+<ParamField path="takingAmount" type="bigint" required>
+  Base taking amount
+</ParamField>
+
+<ParamField path="rate" type="number" required>
+  Current rate bump
+</ParamField>
+
+<ResponseField name="bigint">
+  The adjusted taking amount based on the rate
+</ResponseField>
+
+### calcAuctionMakingAmount
+
+Calculate the making amount for a given rate.
+
+```typescript
+static calcAuctionMakingAmount(makingAmount: bigint, rate: number): bigint
+```
+
+<ParamField path="makingAmount" type="bigint" required>
+  Base making amount
+</ParamField>
+
+<ParamField path="rate" type="number" required>
+  Current rate bump
+</ParamField>
+
+<ResponseField name="bigint">
+  The adjusted making amount based on the rate
+</ResponseField>
+
+### baseFeeToGasPriceEstimate
+
+Encode base fee as gas price estimate for `AuctionGasCostInfo`.
+
+```typescript
+static baseFeeToGasPriceEstimate(baseFee: bigint): bigint
+```
+
+<ParamField path="baseFee" type="bigint" required>
+  Base fee in Wei
+</ParamField>
+
+<ResponseField name="bigint">
+  Gas price estimate (1000 = 1 Gwei)
+</ResponseField>
+
+### calcGasBumpEstimate
+
+Calculate `gasBumpEstimate` for `AuctionGasCostInfo`.
+
+```typescript
+static calcGasBumpEstimate(
+  endTakingAmount: bigint,
+  gasCostInToToken: bigint
+): bigint
+```
+
+<ParamField path="endTakingAmount" type="bigint" required>
+  Minimum return in destination token
+</ParamField>
+
+<ParamField path="gasCostInToToken" type="bigint" required>
+  Gas cost in destination token
+</ParamField>
+
+<ResponseField name="bigint">
+  The gas bump estimate value
+</ResponseField>
+
+## Instance Methods
+
+### calcRateBump
+
+Calculate the rate bump at a specific time during the auction.
+
+```typescript
+calcRateBump(time: bigint, blockBaseFee?: bigint): number
+```
+
+<ParamField path="time" type="bigint" required>
+  Auction timestamp in seconds
+</ParamField>
+
+<ParamField path="blockBaseFee" type="bigint">
+  Block base fee in Wei. If provided, rate will be calculated as if order executed in block with this base fee
+</ParamField>
+
+<ResponseField name="number">
+  The rate bump at the specified time
+</ResponseField>
+
+### calcAuctionTakingAmount
+
+Calculate the taking amount for the current auction state.
+
+```typescript
+calcAuctionTakingAmount(takingAmount: bigint, rate: number): bigint
+```
+
+<ParamField path="takingAmount" type="bigint" required>
+  Base taking amount
+</ParamField>
+
+<ParamField path="rate" type="number" required>
+  Current rate bump from calcRateBump
+</ParamField>
+
+<ResponseField name="bigint">
+  The adjusted taking amount
+</ResponseField>
+
+## Properties
+
+<ResponseField name="finishTime" type="bigint">
+  Get the auction finish time (startTime + duration)
+</ResponseField>
+
+<ResponseField name="RATE_BUMP_DENOMINATOR" type="bigint">
+  Static constant: 10,000,000 (represents 100%)
+</ResponseField>
+
+## Example
+
+```typescript
+import {
+  AuctionCalculator,
+  AuctionDetails,
+  Address
+} from '@1inch/fusion-sdk'
+
+const startTime = 1673548149n
+
+const details = new AuctionDetails({
+  duration: 180n, // in seconds
+  startTime, // unix timestamp (in sec)
+  initialRateBump: 50000,
+  points: [
+    {
+      delay: 10, // relative to auction start time
+      coefficient: 40000
+    },
+    {
+      delay: 10, // relative to previous point
+      coefficient: 40000
+    }
+  ]
+})
+
+const calculator = AuctionCalculator.fromAuctionData(details)
+
+// Calculate rate at specific time
+const rate = calculator.calcRateBump(startTime + 11n)
+// => 40000
+
+// Calculate taking amount with rate
+const auctionTakingAmount = calculator.calcAuctionTakingAmount(
+  1420000000n,
+  rate
+)
+// => 1427105680
+```
+
+## Related Types
+
+### AuctionPoint
+
+<ParamField path="delay" type="number" required>
+  Point in time of this point relative to the previous point (in seconds)
+</ParamField>
+
+<ParamField path="coefficient" type="number" required>
+  Coefficient rate bump from the end of an auction
+</ParamField>
+
+### AuctionGasCostInfo
+
+<ParamField path="gasBumpEstimate" type="bigint" required>
+  Rate bump to cover gas price. Defined as a ratio of gasCostInToToken to endTakingAmount. 10,000,000 means 100%
+</ParamField>
+
+<ParamField path="gasPriceEstimate" type="bigint" required>
+  Gas price at estimation time. 1000 means 1 Gwei
+</ParamField>

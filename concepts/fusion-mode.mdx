@@ -1,0 +1,157 @@
+---
+title: Understanding Fusion Mode
+description: Learn how 1inch Fusion Mode leverages Dutch auctions for optimal trade execution
+---
+
+## What is Fusion Mode?
+
+1inch Fusion Mode is a decentralized order execution protocol that uses Dutch auction mechanics to optimize token swap pricing. Unlike traditional AMM (Automated Market Maker) swaps that execute at a fixed price, Fusion Mode creates competitive auctions where multiple resolvers compete to fill your order at the best possible rate.
+
+## How it works
+
+<Steps>
+  <Step title="Order creation">
+    You create a swap order specifying the tokens you want to exchange and the amount. The SDK generates a signed order with auction parameters.
+  </Step>
+
+  <Step title="Dutch auction starts">
+    Your order enters a Dutch auction where the acceptable price starts high (favorable to resolvers) and gradually decreases over time until it reaches your minimum acceptable rate.
+  </Step>
+
+  <Step title="Resolver competition">
+    Professional resolvers monitor the auction and compete to fill your order. They execute when the price reaches their profitability threshold.
+  </Step>
+
+  <Step title="Settlement">
+    The first resolver to successfully execute the swap at the current auction price wins. You receive your tokens at the best available rate.
+  </Step>
+</Steps>
+
+## Key advantages
+
+<CardGroup cols={2}>
+  <Card title="Better pricing" icon="chart-line">
+    Dutch auctions naturally discover the best market price through resolver competition, often beating AMM rates
+  </Card>
+  <Card title="Gas efficiency" icon="bolt">
+    Resolvers handle the complexity of routing and execution, optimizing gas costs on your behalf
+  </Card>
+  <Card title="MEV protection" icon="shield">
+    The auction mechanism and resolver competition help protect against MEV (Maximal Extractable Value) attacks
+  </Card>
+  <Card title="No slippage" icon="check">
+    You specify your minimum acceptable rate, and the auction ensures you never get less
+  </Card>
+</CardGroup>
+
+## Fusion Mode vs traditional swaps
+
+| Feature | Fusion Mode | Traditional AMM |
+|---------|-------------|-----------------|
+| **Pricing** | Competitive auction | Fixed pool pricing |
+| **Execution** | Off-chain by resolvers | On-chain |
+| **Gas costs** | Optimized by resolvers | Paid directly by user |
+| **MEV protection** | Built-in | Vulnerable |
+| **Settlement** | Single on-chain transaction | Multiple hops possible |
+
+## The auction mechanism
+
+Fusion Mode uses a **Dutch auction** (also called a descending price auction):
+
+1. **Auction start**: The price begins at a level favorable to resolvers (higher than market rate)
+2. **Price decay**: Over the auction duration (typically 60-180 seconds), the price gradually decreases
+3. **Execution**: The first resolver to execute at the current price wins the auction
+4. **Price curve**: You can customize the auction curve to control how quickly the price decreases
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  authKey: 'your-api-key'
+})
+
+// Get a quote with auction details
+const quote = await sdk.getQuote({
+  fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+  toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',  // WETH
+  amount: '1000000000000000000000' // 1000 DAI
+})
+
+// The quote includes auction start and end amounts
+console.log('Auction start amount:', quote.presets[quote.recommendedPreset].auctionStartAmount)
+console.log('Auction end amount:', quote.presets[quote.recommendedPreset].auctionEndAmount)
+```
+
+## Auction presets
+
+The SDK provides three preset auction configurations:
+
+<Tabs>
+  <Tab title="Fast">
+    **Duration**: ~60 seconds
+
+    **Use case**: When you need quick execution and are willing to accept slightly less optimal pricing
+
+    **Price curve**: Steep decline for rapid settlement
+  </Tab>
+
+  <Tab title="Medium (recommended)">
+    **Duration**: ~120 seconds
+
+    **Use case**: Balanced approach for most swaps
+
+    **Price curve**: Moderate decline balancing speed and price optimization
+  </Tab>
+
+  <Tab title="Slow">
+    **Duration**: ~180 seconds
+
+    **Use case**: When you want maximum price optimization and aren't time-sensitive
+
+    **Price curve**: Gradual decline to allow more resolver competition
+  </Tab>
+</Tabs>
+
+You can also create [custom presets](/guides/custom-presets) with fully configurable auction parameters.
+
+## Resolvers
+
+Resolvers are the backbone of Fusion Mode. They are professional market makers and liquidity providers who:
+
+- Monitor auction orders in real-time
+- Calculate optimal execution strategies
+- Compete to fill orders at the best price
+- Handle routing across DEXs and liquidity sources
+- Pay gas costs for settlement
+
+<Note>
+Resolvers earn profit from the spread between the auction price and the actual execution price they achieve. This creates a competitive market that benefits users.
+</Note>
+
+## Security considerations
+
+Fusion Mode is designed with security in mind:
+
+1. **Signed orders**: All orders are cryptographically signed, preventing unauthorized modifications
+2. **Time limits**: Orders have expiration timestamps to prevent stale executions
+3. **Minimum rates**: You specify the worst acceptable price, protecting against unfavorable fills
+4. **Whitelist option**: You can restrict which resolvers can execute your order (optional)
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Auction mechanics" icon="gears" href="/concepts/auction-mechanics">
+    Deep dive into auction parameters and price curves
+  </Card>
+  <Card title="Order lifecycle" icon="rotate" href="/concepts/order-lifecycle">
+    Understand how orders flow from creation to settlement
+  </Card>
+  <Card title="Placing orders" icon="paper-plane" href="/guides/placing-orders">
+    Learn how to create and submit Fusion orders
+  </Card>
+  <Card title="Custom presets" icon="sliders" href="/guides/custom-presets">
+    Configure advanced auction parameters
+  </Card>
+</CardGroup>

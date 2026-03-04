@@ -1,0 +1,272 @@
+---
+title: Welcome to 1inch Fusion SDK
+description: Build and execute token swaps using 1inch Fusion Mode with Dutch auction mechanics
+mode: custom
+---
+
+<div className="relative overflow-hidden bg-gradient-to-br from-[#1B8DEE] to-[#0F6FBE] dark:from-[#0F6FBE] dark:to-[#0a4a82] py-20 px-4 sm:px-6 lg:px-8">
+  <div className="max-w-6xl mx-auto">
+    <div className="lg:grid lg:grid-cols-12 lg:gap-8 items-center">
+      <div className="lg:col-span-7">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mb-6">
+          1inch Fusion SDK
+        </h1>
+        <p className="text-xl text-white/90 mb-8 max-w-2xl">
+          Execute token swaps with Dutch auction mechanics for optimal pricing. Build decentralized exchange integrations with the power of 1inch Fusion Mode.
+        </p>
+        <div className="flex flex-wrap gap-4">
+          <a 
+            href="/quickstart" 
+            className="inline-flex items-center px-6 py-3 bg-white text-[#1B8DEE] font-semibold rounded-lg hover:bg-gray-100 transition-colors no-underline"
+          >
+            Get Started
+          </a>
+          <a 
+            href="/api/fusion-sdk" 
+            className="inline-flex items-center px-6 py-3 border-2 border-white/30 bg-white/10 text-white font-semibold rounded-lg hover:bg-white/20 transition-colors no-underline"
+          >
+            API Reference
+          </a>
+        </div>
+      </div>
+      <div className="hidden lg:block lg:col-span-5 mt-10 lg:mt-0">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent rounded-2xl blur-3xl"></div>
+          <div className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl p-6">
+            <pre className="text-sm text-white/90 overflow-x-auto">
+{`import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  authKey: 'your-api-key'
+})
+
+const quote = await sdk.getQuote({
+  fromTokenAddress: '0x...',
+  toTokenAddress: '0x...',
+  amount: '1000000000000000000'
+})`}
+            </pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Get started in minutes
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Follow these steps to execute your first Fusion swap
+  </p>
+
+  <Steps>
+    <Step title="Install the SDK">
+      Add the 1inch Fusion SDK to your project using your preferred package manager.
+
+      <CodeGroup>
+      ```bash npm
+      npm install @1inch/fusion-sdk
+      ```
+      ```bash yarn
+      yarn add @1inch/fusion-sdk
+      ```
+      ```bash pnpm
+      pnpm add @1inch/fusion-sdk
+      ```
+      </CodeGroup>
+    </Step>
+
+    <Step title="Initialize the SDK">
+      Create a new FusionSDK instance with your configuration.
+
+      ```typescript
+      import { FusionSDK, NetworkEnum, PrivateKeyProviderConnector } from '@1inch/fusion-sdk'
+      import { JsonRpcProvider } from 'ethers'
+
+      const provider = new JsonRpcProvider('YOUR_RPC_URL')
+      const connector = new PrivateKeyProviderConnector(
+        'YOUR_PRIVATE_KEY',
+        provider
+      )
+
+      const sdk = new FusionSDK({
+        url: 'https://api.1inch.dev/fusion',
+        network: NetworkEnum.ETHEREUM,
+        blockchainProvider: connector,
+        authKey: 'YOUR_API_KEY'
+      })
+      ```
+    </Step>
+
+    <Step title="Create and submit an order">
+      Get a quote, create an order, and submit it to the network.
+
+      ```typescript
+      const params = {
+        fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+        toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',  // WETH
+        amount: '1000000000000000000', // 1 DAI
+        walletAddress: '0xYourAddress'
+      }
+
+      const quote = await sdk.getQuote(params)
+      const order = await sdk.createOrder(params)
+      const result = await sdk.submitOrder(order.order, order.quoteId)
+
+      console.log('Order hash:', result.orderHash)
+      ```
+
+      <Accordion title="Example response">
+        ```json
+        {
+          "orderHash": "0x1234567890abcdef...",
+          "quoteId": "abc-123-def-456",
+          "signature": "0x9876543210fedcba..."
+        }
+        ```
+      </Accordion>
+    </Step>
+  </Steps>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Key features
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Everything you need to build powerful DEX integrations
+  </p>
+
+  <CardGroup cols={2}>
+    <Card title="Dutch auction pricing" icon="chart-line" href="/concepts/auction-mechanics">
+      Optimize swap execution with dynamic price curves that improve over time
+    </Card>
+    <Card title="Multi-network support" icon="globe" href="/concepts/networks">
+      Deploy on Ethereum, BSC, Polygon, Arbitrum, and more
+    </Card>
+    <Card title="Native token swaps" icon="coins" href="/guides/native-token-swaps">
+      Seamlessly swap native tokens with automatic wrapping
+    </Card>
+    <Card title="Custom presets" icon="sliders" href="/guides/custom-presets">
+      Fine-tune auction parameters for your specific use case
+    </Card>
+    <Card title="Real-time tracking" icon="satellite-dish" href="/guides/websocket-integration">
+      Monitor order status with WebSocket API
+    </Card>
+    <Card title="Integrator fees" icon="percent" href="/guides/integrator-fees">
+      Earn revenue on every swap with built-in fee support
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+    Explore the documentation
+  </h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Deep dive into core concepts and API references
+  </p>
+
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a 
+      href="/concepts/fusion-mode" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#1B8DEE] dark:hover:border-[#1B8DEE] overflow-hidden transition-all no-underline"
+    >
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <span>Understanding Fusion Mode</span>
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Learn how Fusion Mode leverages Dutch auctions for optimal trade execution
+        </p>
+        <span className="text-sm font-medium text-[#1B8DEE] group-hover:text-[#0F6FBE] flex items-center gap-1">
+          Read more
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+
+    <a 
+      href="/concepts/order-lifecycle" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#1B8DEE] dark:hover:border-[#1B8DEE] overflow-hidden transition-all no-underline"
+    >
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <span>Order lifecycle</span>
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Understand how orders flow from creation through execution and settlement
+        </p>
+        <span className="text-sm font-medium text-[#1B8DEE] group-hover:text-[#0F6FBE] flex items-center gap-1">
+          Read more
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+
+    <a 
+      href="/api/fusion-sdk" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#1B8DEE] dark:hover:border-[#1B8DEE] overflow-hidden transition-all no-underline"
+    >
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <span>FusionSDK API</span>
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Complete reference for the main SDK class with all methods and parameters
+        </p>
+        <span className="text-sm font-medium text-[#1B8DEE] group-hover:text-[#0F6FBE] flex items-center gap-1">
+          View API
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+
+    <a 
+      href="/api/websocket-api" 
+      className="group block rounded-2xl border border-gray-200 dark:border-[#27272a] hover:border-[#1B8DEE] dark:hover:border-[#1B8DEE] overflow-hidden transition-all no-underline"
+    >
+      <div className="p-6 bg-white dark:bg-[#1a1d27]">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <span>WebSocket API</span>
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          Real-time order updates and event streaming via WebSocket connections
+        </p>
+        <span className="text-sm font-medium text-[#1B8DEE] group-hover:text-[#0F6FBE] flex items-center gap-1">
+          View API
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </span>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <div className="rounded-2xl bg-gradient-to-br from-[#1B8DEE]/10 to-[#0F6FBE]/10 dark:from-[#1B8DEE]/20 dark:to-[#0F6FBE]/20 border border-[#1B8DEE]/20 dark:border-[#1B8DEE]/30 p-8">
+    <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white mb-4">
+      Ready to start building?
+    </h2>
+    <p className="text-base text-gray-600 dark:text-gray-400 mb-6 max-w-2xl">
+      Follow our quickstart guide to execute your first Fusion swap in minutes.
+    </p>
+    <a 
+      href="/quickstart" 
+      className="inline-flex items-center px-6 py-3 bg-[#1B8DEE] text-white font-semibold rounded-lg hover:bg-[#0F6FBE] transition-colors no-underline"
+    >
+      View quickstart guide
+    </a>
+  </div>
+</div>

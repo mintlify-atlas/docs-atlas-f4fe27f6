@@ -1,80 +1,377 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Execute your first token swap with 1inch Fusion Mode in minutes
 ---
 
-## Get started in three steps
+This guide will walk you through creating and executing your first Fusion Mode swap. You'll learn how to set up the SDK, get a quote, and submit an order.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+Before you begin, ensure you have:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- Node.js 16+ installed
+- A blockchain RPC provider URL (Alchemy, Infura, etc.)
+- A private key for signing transactions
+- A 1inch Dev Portal API token ([get one here](https://portal.1inch.dev))
+- Some tokens to swap (for testing, use a testnet)
 
-### Step 2: Deploy your changes
+<Warning>
+Never commit private keys to version control. Use environment variables or a secure secrets manager.
+</Warning>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+## Step-by-step guide
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Steps>
+  <Step title="Install the SDK">
+    Install the 1inch Fusion SDK using your preferred package manager:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    <CodeGroup>
+    ```bash npm
+    npm install @1inch/fusion-sdk
+    ```
+    ```bash yarn
+    yarn add @1inch/fusion-sdk
+    ```
+    ```bash pnpm
+    pnpm add @1inch/fusion-sdk
+    ```
+    </CodeGroup>
 
-### Step 3: Go live
+    Also install ethers for blockchain interaction:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    npm install ethers
+    ```
+  </Step>
+
+  <Step title="Set up your environment">
+    Create a `.env` file with your configuration:
+
+    ```bash
+    PRIVATE_KEY=your_private_key_here
+    RPC_URL=your_rpc_url_here
+    API_TOKEN=your_1inch_api_token_here
+    ```
+
+    <Warning>
+    Add `.env` to your `.gitignore` file to prevent accidentally committing sensitive data.
+    </Warning>
+  </Step>
+
+  <Step title="Initialize the SDK">
+    Create a new file `swap.ts` and set up the SDK:
+
+    ```typescript
+    import { 
+      FusionSDK, 
+      NetworkEnum, 
+      PrivateKeyProviderConnector,
+      Web3Like 
+    } from '@1inch/fusion-sdk'
+    import { JsonRpcProvider, computeAddress } from 'ethers'
+
+    // Configuration
+    const PRIVATE_KEY = process.env.PRIVATE_KEY!
+    const RPC_URL = process.env.RPC_URL!
+    const API_TOKEN = process.env.API_TOKEN!
+
+    // Set up the blockchain provider
+    const ethersProvider = new JsonRpcProvider(RPC_URL)
+
+    const web3Provider: Web3Like = {
+      eth: {
+        call(transactionConfig): Promise<string> {
+          return ethersProvider.call(transactionConfig)
+        }
+      },
+      extend(): void {}
+    }
+
+    // Create the blockchain connector
+    const connector = new PrivateKeyProviderConnector(
+      PRIVATE_KEY,
+      web3Provider
+    )
+
+    // Initialize the SDK
+    const sdk = new FusionSDK({
+      url: 'https://api.1inch.dev/fusion',
+      network: NetworkEnum.ETHEREUM,
+      blockchainProvider: connector,
+      authKey: API_TOKEN
+    })
+
+    console.log('SDK initialized successfully')
+    ```
+  </Step>
+
+  <Step title="Get a quote">
+    Get a quote for your desired swap:
+
+    ```typescript
+    async function getSwapQuote() {
+      const walletAddress = computeAddress(PRIVATE_KEY)
+
+      const params = {
+        fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+        toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',  // WETH
+        amount: '1000000000000000000000', // 1000 DAI
+        walletAddress,
+        source: 'my-app'
+      }
+
+      const quote = await sdk.getQuote(params)
+
+      console.log('Quote received:')
+      console.log('Recommended preset:', quote.recommendedPreset)
+      console.log('Auction start amount:', quote.presets[quote.recommendedPreset].auctionStartAmount)
+      console.log('Auction end amount:', quote.presets[quote.recommendedPreset].auctionEndAmount)
+
+      return { quote, params }
+    }
+    ```
+
+    <Accordion title="Understanding the quote response">
+      The quote includes:
+      - **Recommended preset**: The optimal auction configuration (fast, medium, or slow)
+      - **Auction start amount**: The initial (best) price for resolvers
+      - **Auction end amount**: Your minimum acceptable price
+      - **Quote ID**: Used when submitting the order
+    </Accordion>
+  </Step>
+
+  <Step title="Create and submit the order">
+    Create an order from the quote and submit it:
+
+    ```typescript
+    async function createAndSubmitOrder() {
+      const walletAddress = computeAddress(PRIVATE_KEY)
+
+      const params = {
+        fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+        toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',  // WETH
+        amount: '1000000000000000000000', // 1000 DAI
+        walletAddress,
+        source: 'my-app'
+      }
+
+      // Create the order
+      const preparedOrder = await sdk.createOrder(params)
+      console.log('Order created:', preparedOrder.hash)
+
+      // Submit the order
+      const result = await sdk.submitOrder(
+        preparedOrder.order,
+        preparedOrder.quoteId
+      )
+
+      console.log('Order submitted successfully!')
+      console.log('Order hash:', result.orderHash)
+      console.log('Signature:', result.signature)
+
+      return result.orderHash
+    }
+    ```
+  </Step>
+
+  <Step title="Monitor the order">
+    Track your order status until it's filled:
+
+    ```typescript
+    import { OrderStatus } from '@1inch/fusion-sdk'
+
+    async function waitForOrderFill(orderHash: string) {
+      console.log('Monitoring order:', orderHash)
+      const startTime = Date.now()
+
+      while (true) {
+        try {
+          const status = await sdk.getOrderStatus(orderHash)
+
+          if (status.status === OrderStatus.Filled) {
+            console.log('✅ Order filled!')
+            console.log('Transaction hash:', status.fills[0].txHash)
+            console.log('Execution time:', (Date.now() - startTime) / 1000, 'seconds')
+            break
+          }
+
+          if (status.status === OrderStatus.Expired) {
+            console.log('❌ Order expired without execution')
+            break
+          }
+
+          if (status.status === OrderStatus.Cancelled) {
+            console.log('🚫 Order was cancelled')
+            break
+          }
+
+          console.log('⏳ Order status:', status.status)
+          await new Promise(resolve => setTimeout(resolve, 5000))
+
+        } catch (error) {
+          console.error('Error checking status:', error)
+          await new Promise(resolve => setTimeout(resolve, 5000))
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Run the complete example">
+    Put it all together:
+
+    ```typescript
+    async function main() {
+      try {
+        // Get quote
+        console.log('1. Getting quote...')
+        const { quote, params } = await getSwapQuote()
+
+        // Create and submit order
+        console.log('\n2. Creating and submitting order...')
+        const orderHash = await createAndSubmitOrder()
+
+        // Monitor until filled
+        console.log('\n3. Monitoring order...')
+        await waitForOrderFill(orderHash)
+
+      } catch (error) {
+        console.error('Error:', error)
+      }
+    }
+
+    main()
+    ```
+
+    Run your script:
+
+    ```bash
+    npx ts-node swap.ts
+    ```
+  </Step>
+</Steps>
+
+## Complete example
+
+Here's the full working example you can copy and use:
+
+```typescript
+import { 
+  FusionSDK, 
+  NetworkEnum, 
+  OrderStatus,
+  PrivateKeyProviderConnector,
+  Web3Like 
+} from '@1inch/fusion-sdk'
+import { JsonRpcProvider, computeAddress } from 'ethers'
+
+const PRIVATE_KEY = process.env.PRIVATE_KEY!
+const RPC_URL = process.env.RPC_URL!
+const API_TOKEN = process.env.API_TOKEN!
+
+// Set up provider
+const ethersProvider = new JsonRpcProvider(RPC_URL)
+const web3Provider: Web3Like = {
+  eth: {
+    call(transactionConfig): Promise<string> {
+      return ethersProvider.call(transactionConfig)
+    }
+  },
+  extend(): void {}
+}
+
+const connector = new PrivateKeyProviderConnector(PRIVATE_KEY, web3Provider)
+
+// Initialize SDK
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  blockchainProvider: connector,
+  authKey: API_TOKEN
+})
+
+async function executeSwap() {
+  const walletAddress = computeAddress(PRIVATE_KEY)
+
+  const params = {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f', // DAI
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',  // WETH
+    amount: '1000000000000000000000', // 1000 DAI
+    walletAddress,
+    source: 'quickstart-example'
+  }
+
+  // Get quote
+  const quote = await sdk.getQuote(params)
+  console.log('Quote:', quote.presets[quote.recommendedPreset])
+
+  // Create and submit order
+  const preparedOrder = await sdk.createOrder(params)
+  const result = await sdk.submitOrder(preparedOrder.order, preparedOrder.quoteId)
+  console.log('Order hash:', result.orderHash)
+
+  // Monitor status
+  const startTime = Date.now()
+  while (true) {
+    const status = await sdk.getOrderStatus(result.orderHash)
+
+    if (status.status === OrderStatus.Filled) {
+      console.log('Filled in', (Date.now() - startTime) / 1000, 'seconds')
+      console.log('TX:', status.fills[0].txHash)
+      break
+    }
+
+    if ([OrderStatus.Expired, OrderStatus.Cancelled].includes(status.status)) {
+      console.log('Order not filled:', status.status)
+      break
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 3000))
+  }
+}
+
+executeSwap().catch(console.error)
+```
+
+## Important notes
+
+<Note>
+**Approvals required**: Before your first swap, you must approve the 1inch Limit Order contract to spend your tokens. The contract address is `0x111111125421ca6dc452d289314280a0f8842a65`.
+</Note>
+
+<Warning>
+**Balance check**: Ensure your wallet has sufficient token balance before creating an order. Orders with insufficient balance will be marked as invalid.
+</Warning>
+
+<Tip>
+**Network selection**: This example uses Ethereum mainnet. To use other networks, change the `network` parameter to `NetworkEnum.POLYGON`, `NetworkEnum.BINANCE`, etc.
+</Tip>
+
+## What's happening under the hood
+
+When you submit a Fusion order:
+
+1. **Order creation**: Your swap parameters are converted into a signed limit order
+2. **Auction starts**: The order enters a Dutch auction where the acceptable price decreases over time
+3. **Resolver competition**: Professional market makers compete to fill your order at the best price
+4. **Settlement**: The first resolver to execute at the current auction price wins and settles on-chain
+5. **Completion**: You receive your tokens at the execution price
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you've executed your first swap, explore more advanced features:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Native token swaps" icon="coins" href="/guides/native-token-swaps">
+    Learn how to swap ETH, BNB, and other native tokens
+  </Card>
+  <Card title="Custom presets" icon="sliders" href="/guides/custom-presets">
+    Configure custom auction parameters for optimal pricing
+  </Card>
+  <Card title="Order management" icon="list-check" href="/guides/order-management">
+    Check order status, cancel orders, and query history
+  </Card>
+  <Card title="WebSocket integration" icon="satellite-dish" href="/guides/websocket-integration">
+    Real-time order updates with WebSocket API
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

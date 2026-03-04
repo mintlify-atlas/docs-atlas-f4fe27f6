@@ -1,0 +1,221 @@
+---
+title: "Connectors"
+description: "Blockchain and provider connectors for signing and executing transactions"
+---
+
+## Overview
+
+Connectors provide the interface between the Fusion SDK and blockchain providers. They handle signing typed data and making contract calls.
+
+## BlockchainProviderConnector
+
+Interface that all blockchain provider connectors must implement.
+
+```typescript
+interface BlockchainProviderConnector {
+  signTypedData(
+    walletAddress: string,
+    typedData: EIP712TypedData
+  ): Promise<string>
+
+  ethCall(
+    contractAddress: string,
+    callData: string
+  ): Promise<string>
+}
+```
+
+### Methods
+
+<ParamField path="signTypedData" type="function" required>
+  Sign EIP-712 typed data
+  
+  **Parameters:**
+  - `walletAddress` (string): The wallet address to sign with
+  - `typedData` (EIP712TypedData): The typed data to sign
+  
+  **Returns:** Promise\<string\> - The signature
+</ParamField>
+
+<ParamField path="ethCall" type="function" required>
+  Execute an eth_call to read contract state
+  
+  **Parameters:**
+  - `contractAddress` (string): The contract address to call
+  - `callData` (string): The encoded call data
+  
+  **Returns:** Promise\<string\> - The call result
+</ParamField>
+
+## PrivateKeyProviderConnector
+
+A blockchain provider connector that uses a private key for signing.
+
+### Constructor
+
+```typescript
+new PrivateKeyProviderConnector(
+  privateKey: string,
+  web3Provider: Web3Like
+)
+```
+
+<ParamField path="privateKey" type="string" required>
+  The private key to use for signing (with or without 0x prefix)
+</ParamField>
+
+<ParamField path="web3Provider" type="Web3Like" required>
+  A Web3-like provider for making contract calls
+</ParamField>
+
+### Example
+
+```typescript
+import { PrivateKeyProviderConnector } from '@1inch/fusion-sdk'
+import Web3 from 'web3'
+
+const web3 = new Web3('https://eth.llamarpc.com')
+
+const connector = new PrivateKeyProviderConnector(
+  'your-private-key',
+  web3
+)
+
+// Use with FusionSDK
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  blockchainProvider: connector
+})
+```
+
+### Methods
+
+<ParamField path="signTypedData" type="function">
+  **Parameters:**
+  - `walletAddress` (string): Not used, signature is created from private key
+  - `typedData` (EIP712TypedData): The typed data to sign
+  
+  **Returns:** Promise\<string\> - The signature
+</ParamField>
+
+<ParamField path="ethCall" type="function">
+  **Parameters:**
+  - `contractAddress` (string): The contract address to call
+  - `callData` (string): The encoded call data
+  
+  **Returns:** Promise\<string\> - The call result
+</ParamField>
+
+## Web3ProviderConnector
+
+A blockchain provider connector that uses a Web3 provider's signing capabilities.
+
+### Constructor
+
+```typescript
+new Web3ProviderConnector(web3Provider: Web3Like)
+```
+
+<ParamField path="web3Provider" type="Web3Like" required>
+  A Web3-like provider for signing and making contract calls
+</ParamField>
+
+### Example
+
+```typescript
+import { Web3ProviderConnector } from '@1inch/fusion-sdk'
+import Web3 from 'web3'
+
+const web3 = new Web3(window.ethereum)
+
+const connector = new Web3ProviderConnector(web3)
+
+// Use with FusionSDK
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  blockchainProvider: connector
+})
+```
+
+### Methods
+
+<ParamField path="signTypedData" type="function">
+  Uses eth_signTypedData_v4 RPC method
+  
+  **Parameters:**
+  - `walletAddress` (string): The wallet address to sign with
+  - `typedData` (EIP712TypedData): The typed data to sign
+  
+  **Returns:** Promise\<string\> - The signature
+</ParamField>
+
+<ParamField path="ethCall" type="function">
+  **Parameters:**
+  - `contractAddress` (string): The contract address to call
+  - `callData` (string): The encoded call data
+  
+  **Returns:** Promise\<string\> - The call result
+</ParamField>
+
+## Web3Like Interface
+
+A minimal Web3 provider interface compatible with Web3.js.
+
+```typescript
+interface Web3Like {
+  eth: {
+    call(transactionConfig: TransactionConfig): Promise<string>
+  }
+  extend(extension: unknown): any
+}
+```
+
+<ParamField path="eth.call" type="function" required>
+  Execute an eth_call to read contract state
+  
+  **Parameters:**
+  - `transactionConfig` (TransactionConfig): Transaction configuration with `to` and `data` fields
+  
+  **Returns:** Promise\<string\> - The call result
+</ParamField>
+
+<ParamField path="extend" type="function" required>
+  Extend the Web3 instance with custom methods
+  
+  **Parameters:**
+  - `extension` (unknown): Extension configuration
+  
+  **Returns:** any - The extended Web3 instance
+</ParamField>
+
+### TransactionConfig
+
+```typescript
+interface TransactionConfig {
+  data?: string
+  to?: string
+}
+```
+
+<ParamField path="data" type="string">
+  The encoded call data
+</ParamField>
+
+<ParamField path="to" type="string">
+  The contract address to call
+</ParamField>
+
+## Provider Compatibility
+
+The `Web3Like` interface is compatible with:
+- Web3.js (v1.x and v4.x)
+- Ethers.js providers (wrapped)
+- MetaMask and other browser wallets
+- Custom RPC providers
+
+## See Also
+
+- [FusionSDK Configuration](/sdk/quickstart)
+- [Order Creation](/sdk/create-order)

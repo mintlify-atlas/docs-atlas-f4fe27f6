@@ -1,0 +1,395 @@
+---
+title: 'Native Token Swaps'
+description: 'How to swap native assets like ETH and BNB using Fusion Mode'
+---
+
+## Overview
+
+Swapping native blockchain assets (ETH, BNB, etc.) requires a slightly different flow than ERC-20 token swaps. This guide covers the complete process for native token swaps using the 1inch Fusion SDK.
+
+## Why Native Swaps Are Different
+
+<Note>
+Native assets like ETH cannot be directly approved like ERC-20 tokens. Instead, you must submit the order and then send a transaction that wraps the native asset as part of the order creation.
+</Note>
+
+Key differences:
+- Use `submitNativeOrder()` instead of `submitOrder()`
+- Must send a transaction using `NativeOrdersFactory`
+- Order is activated when the transaction is confirmed
+
+## Complete Example
+
+```typescript
+import {
+    FusionSDK,
+    NetworkEnum,
+    OrderStatus,
+    PrivateKeyProviderConnector,
+    Web3Like,
+    Address,
+    NativeOrdersFactory
+} from '@1inch/fusion-sdk'
+import { computeAddress, formatUnits, JsonRpcProvider, Wallet } from 'ethers'
+
+const PRIVATE_KEY = 'YOUR_PRIVATE_KEY'
+const NODE_URL = 'YOUR_WEB3_NODE_URL'
+const DEV_PORTAL_API_TOKEN = 'YOUR_DEV_PORTAL_API_TOKEN'
+
+const ethersRpcProvider = new JsonRpcProvider(NODE_URL)
+
+const ethersProviderConnector: Web3Like = {
+    eth: {
+        call(transactionConfig): Promise<string> {
+            return ethersRpcProvider.call(transactionConfig)
+        }
+    },
+    extend(): void {}
+}
+
+const connector = new PrivateKeyProviderConnector(
+    PRIVATE_KEY,
+    ethersProviderConnector
+)
+
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.BINANCE,
+    blockchainProvider: connector,
+    authKey: DEV_PORTAL_API_TOKEN
+})
+
+const wallet = new Wallet(PRIVATE_KEY, ethersRpcProvider)
+
+async function main() {
+    const params = {
+        fromTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // ETH
+        toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',  // USDC
+        amount: '2000000000000000', // 0.002 ETH
+        walletAddress: computeAddress(PRIVATE_KEY),
+        source: 'sdk-test'
+    }
+    
+    const quote = await sdk.getQuote(params)
+
+    const dstTokenDecimals = 6
+    console.log(
+        'Auction start amount',
+        formatUnits(
+            quote.presets[quote.recommendedPreset].auctionStartAmount,
+            dstTokenDecimals
+        )
+    )
+    console.log(
+        'Auction end amount',
+        formatUnits(
+            quote.presets[quote.recommendedPreset].auctionEndAmount,
+            dstTokenDecimals
+        )
+    )
+
+    const preparedOrder = await sdk.createOrder(params)
+
+    const info = await sdk.submitNativeOrder(
+        preparedOrder.order,
+        new Address(params.walletAddress),
+        preparedOrder.quoteId
+    )
+
+    console.log('OrderHash', info.orderHash)
+
+    const factory = NativeOrdersFactory.default(NetworkEnum.BINANCE)
+    const call = factory.create(
+        new Address(wallet.address),
+        preparedOrder.order.build()
+    )
+
+    const txRes = await wallet.sendTransaction({
+        to: call.to.toString(),
+        data: call.data,
+        value: call.value
+    })
+
+    console.log('TxHash', txRes.hash)
+
+    await wallet.provider.waitForTransaction(txRes.hash)
+
+    const start = Date.now()
+
+    while (true) {
+        try {
+            const data = await sdk.getOrderStatus(info.orderHash)
+
+            if (data.status === OrderStatus.Filled) {
+                console.log('fills', data.fills)
+                break
+            }
+
+            if (data.status === OrderStatus.Expired) {
+                console.log('Order Expired')
+                break
+            }
+            
+            if (data.status === OrderStatus.Cancelled) {
+                console.log('Order Cancelled')
+                break
+            }
+        } catch (e) {
+            console.log(e)
+        }
+    }
+
+    console.log('Order executed for', (Date.now() - start) / 1000, 'sec')
+}
+
+main()
+```
+
+## Step-by-Step Breakdown
+
+<Steps>
+  <Step title="Identify Native Token">
+    Use the special address `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` for native assets
+  </Step>
+  <Step title="Get Quote">
+    Request a quote just like any other swap
+  </Step>
+  <Step title="Create Order">
+    Build the order structure with `createOrder()`
+  </Step>
+  <Step title="Submit Native Order">
+    Use `submitNativeOrder()` instead of `submitOrder()`
+  </Step>
+  <Step title="Send Transaction">
+    Create and send the transaction using `NativeOrdersFactory`
+  </Step>
+  <Step title="Monitor Status">
+    Track order status after transaction confirmation
+  </Step>
+</Steps>
+
+## Native Token Address
+
+<CodeGroup>
+```typescript Ethereum
+const nativeTokenAddress = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+```
+
+```typescript Any Network
+// This special address is used across all networks
+const ETH_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+
+const params = {
+    fromTokenAddress: ETH_ADDRESS, // For ETH, BNB, MATIC, etc.
+    toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    amount: '1000000000000000000', // 1 ETH in wei
+    walletAddress: userAddress
+}
+```
+</CodeGroup>
+
+## Using NativeOrdersFactory
+
+The `NativeOrdersFactory` creates the transaction data needed to activate your native token order:
+
+```typescript
+import { NativeOrdersFactory, NetworkEnum, Address } from '@1inch/fusion-sdk'
+
+// Create factory for your network
+const factory = NativeOrdersFactory.default(NetworkEnum.ETHEREUM)
+
+// Generate transaction call data
+const call = factory.create(
+    new Address(walletAddress),
+    preparedOrder.order.build()
+)
+
+// Send transaction
+const tx = await wallet.sendTransaction({
+    to: call.to.toString(),     // Contract address
+    data: call.data,             // Encoded call data
+    value: call.value            // Native token amount
+})
+```
+
+## Selling Native Tokens
+
+<CodeGroup>
+```typescript ETH to USDC
+const params = {
+    fromTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    amount: '1000000000000000000', // 1 ETH
+    walletAddress: userAddress
+}
+```
+
+```typescript BNB to BUSD
+const params = {
+    fromTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    toTokenAddress: '0xe9e7cea3dedca5984780bafc599bd69add087d56',
+    amount: '5000000000000000000', // 5 BNB
+    walletAddress: userAddress
+}
+```
+</CodeGroup>
+
+## Buying Native Tokens
+
+<CodeGroup>
+```typescript USDC to ETH
+const params = {
+    fromTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+    toTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    amount: '1000000000', // 1000 USDC (6 decimals)
+    walletAddress: userAddress
+}
+
+// For buying native tokens, use regular submitOrder()
+const info = await sdk.submitOrder(
+    preparedOrder.order,
+    preparedOrder.quoteId
+)
+```
+
+```typescript DAI to ETH
+const params = {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    amount: '1000000000000000000000', // 1000 DAI
+    walletAddress: userAddress
+}
+```
+</CodeGroup>
+
+<Warning>
+When **buying** native tokens (native token is the `toTokenAddress`), use the standard `submitOrder()` flow. Only use `submitNativeOrder()` when **selling** native tokens.
+</Warning>
+
+## Network-Specific Examples
+
+<CodeGroup>
+```typescript Ethereum
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.ETHEREUM,
+    blockchainProvider: connector,
+    authKey: DEV_PORTAL_API_TOKEN
+})
+
+const factory = NativeOrdersFactory.default(NetworkEnum.ETHEREUM)
+```
+
+```typescript Binance Smart Chain
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.BINANCE,
+    blockchainProvider: connector,
+    authKey: DEV_PORTAL_API_TOKEN
+})
+
+const factory = NativeOrdersFactory.default(NetworkEnum.BINANCE)
+```
+
+```typescript Polygon
+const sdk = new FusionSDK({
+    url: 'https://api.1inch.dev/fusion',
+    network: NetworkEnum.POLYGON,
+    blockchainProvider: connector,
+    authKey: DEV_PORTAL_API_TOKEN
+})
+
+const factory = NativeOrdersFactory.default(NetworkEnum.POLYGON)
+```
+</CodeGroup>
+
+## Transaction Confirmation
+
+<Tip>
+Wait for transaction confirmation before checking order status to ensure the order is properly activated.
+</Tip>
+
+```typescript
+// Send transaction
+const txRes = await wallet.sendTransaction({
+    to: call.to.toString(),
+    data: call.data,
+    value: call.value
+})
+
+console.log('Transaction sent:', txRes.hash)
+
+// Wait for confirmation
+await wallet.provider.waitForTransaction(txRes.hash)
+
+console.log('Transaction confirmed')
+
+// Now safe to check order status
+const status = await sdk.getOrderStatus(info.orderHash)
+```
+
+## Error Handling
+
+```typescript
+try {
+    const preparedOrder = await sdk.createOrder(params)
+    
+    const info = await sdk.submitNativeOrder(
+        preparedOrder.order,
+        new Address(params.walletAddress),
+        preparedOrder.quoteId
+    )
+    
+    const factory = NativeOrdersFactory.default(NetworkEnum.ETHEREUM)
+    const call = factory.create(
+        new Address(wallet.address),
+        preparedOrder.order.build()
+    )
+    
+    const tx = await wallet.sendTransaction({
+        to: call.to.toString(),
+        data: call.data,
+        value: call.value
+    })
+    
+    await tx.wait()
+    
+    console.log('Native order successfully created:', info.orderHash)
+    
+} catch (error) {
+    if (error.code === 'INSUFFICIENT_FUNDS') {
+        console.error('Insufficient native token balance')
+    } else if (error.code === 'UNPREDICTABLE_GAS_LIMIT') {
+        console.error('Transaction may fail, check parameters')
+    } else {
+        console.error('Order creation failed:', error.message)
+    }
+}
+```
+
+## Common Issues
+
+### Insufficient Balance
+
+Ensure you have enough native tokens to cover:
+- The swap amount
+- Gas fees for the transaction
+
+### Wrong Address Format
+
+<Warning>
+Always use `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` (40 'e's) for native tokens, not the wrapped token address.
+</Warning>
+
+### Transaction Reverts
+
+If the transaction fails:
+1. Verify you have sufficient balance
+2. Check that the order hasn't expired
+3. Ensure gas limits are sufficient
+
+## Next Steps
+
+- Learn about [Order Management](/guides/order-management) to track and cancel orders
+- Configure [Custom Presets](/guides/custom-presets) for better execution
+- Add [Integrator Fees](/guides/integrator-fees) to monetize your integration

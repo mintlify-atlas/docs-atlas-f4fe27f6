@@ -1,0 +1,429 @@
+---
+title: Supported networks
+description: Networks supported by 1inch Fusion SDK and their configurations
+---
+
+## Overview
+
+The 1inch Fusion SDK supports token swaps across 13 EVM-compatible blockchain networks. Each network has its own set of resolvers, liquidity sources, and characteristics that may affect your swap execution.
+
+## Supported networks
+
+The SDK uses the `NetworkEnum` to specify which network to operate on:
+
+<CardGroup cols={2}>
+  <Card title="Ethereum" icon="ethereum">
+    **Chain ID**: 1
+
+    **Network**: `NetworkEnum.ETHEREUM`
+
+    The largest and most liquid network with the best resolver competition
+  </Card>
+
+  <Card title="Polygon" icon="gem">
+    **Chain ID**: 137
+
+    **Network**: `NetworkEnum.POLYGON`
+
+    Low gas fees with good liquidity for major token pairs
+  </Card>
+
+  <Card title="BNB Chain" icon="coins">
+    **Chain ID**: 56
+
+    **Network**: `NetworkEnum.BINANCE`
+
+    Popular for DeFi with competitive liquidity and low fees
+  </Card>
+
+  <Card title="Arbitrum" icon="layer-group">
+    **Chain ID**: 42161
+
+    **Network**: `NetworkEnum.ARBITRUM`
+
+    Ethereum L2 with significantly lower gas costs
+  </Card>
+
+  <Card title="Optimism" icon="circle-o">
+    **Chain ID**: 10
+
+    **Network**: `NetworkEnum.OPTIMISM`
+
+    Ethereum L2 optimized for fast, cheap transactions
+  </Card>
+
+  <Card title="Base" icon="b">
+    **Chain ID**: 8453
+
+    **Network**: `NetworkEnum.COINBASE`
+
+    Coinbase's L2 network built on Optimism stack
+  </Card>
+
+  <Card title="Avalanche" icon="mountain">
+    **Chain ID**: 43114
+
+    **Network**: `NetworkEnum.AVALANCHE`
+
+    High-throughput chain with sub-second finality
+  </Card>
+
+  <Card title="zkSync Era" icon="shield">
+    **Chain ID**: 324
+
+    **Network**: `NetworkEnum.ZKSYNC`
+
+    ZK-rollup L2 with enhanced security and privacy
+  </Card>
+
+  <Card title="Gnosis" icon="link">
+    **Chain ID**: 100
+
+    **Network**: `NetworkEnum.GNOSIS`
+
+    Ethereum sidechain focused on stable payments
+  </Card>
+
+  <Card title="Fantom" icon="ghost">
+    **Chain ID**: 250
+
+    **Network**: `NetworkEnum.FANTOM`
+
+    Fast, low-cost network popular for DeFi
+  </Card>
+
+  <Card title="Linea" icon="lines-leaning">
+    **Chain ID**: 59144
+
+    **Network**: `NetworkEnum.LINEA`
+
+    ConsenSys zkEVM L2 network
+  </Card>
+
+  <Card title="Sonic" icon="bolt">
+    **Chain ID**: 146
+
+    **Network**: `NetworkEnum.SONIC`
+
+    High-performance blockchain network
+  </Card>
+
+  <Card title="Unichain" icon="unicorn">
+    **Chain ID**: 130
+
+    **Network**: `NetworkEnum.UNICHAIN`
+
+    Uniswap's dedicated L2 network
+  </Card>
+</CardGroup>
+
+## Network configuration
+
+Configure the SDK for your desired network:
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+// Ethereum mainnet
+const ethSdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  authKey: 'your-api-key'
+})
+
+// Polygon
+const polySdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.POLYGON,
+  authKey: 'your-api-key'
+})
+
+// Arbitrum
+const arbSdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ARBITRUM,
+  authKey: 'your-api-key'
+})
+```
+
+## Network-specific considerations
+
+### Native token addresses
+
+Each network has a different native token (ETH, BNB, MATIC, etc.). The SDK uses a special address to represent native tokens:
+
+```typescript
+const NATIVE_TOKEN_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+```
+
+When swapping native tokens, use this address and the special native token flow:
+
+<Tabs>
+  <Tab title="Ethereum">
+    ```typescript
+    import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+    const params = {
+      fromTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // ETH
+      toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',  // USDC
+      amount: '1000000000000000000', // 1 ETH
+      walletAddress: '0xYourAddress'
+    }
+
+    const sdk = new FusionSDK({
+      url: 'https://api.1inch.dev/fusion',
+      network: NetworkEnum.ETHEREUM,
+      blockchainProvider: connector,
+      authKey: 'your-api-key'
+    })
+
+    const order = await sdk.createOrder(params)
+    await sdk.submitNativeOrder(order.order, new Address(params.walletAddress), order.quoteId)
+    ```
+  </Tab>
+
+  <Tab title="BNB Chain">
+    ```typescript
+    const params = {
+      fromTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // BNB
+      toTokenAddress: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',  // USDC
+      amount: '100000000000000000', // 0.1 BNB
+      walletAddress: '0xYourAddress'
+    }
+
+    const sdk = new FusionSDK({
+      url: 'https://api.1inch.dev/fusion',
+      network: NetworkEnum.BINANCE,
+      blockchainProvider: connector,
+      authKey: 'your-api-key'
+    })
+    ```
+  </Tab>
+
+  <Tab title="Polygon">
+    ```typescript
+    const params = {
+      fromTokenAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', // MATIC
+      toTokenAddress: '0x2791bca1f2de4661ed88a30c99a7a9449aa84174',  // USDC
+      amount: '10000000000000000000', // 10 MATIC
+      walletAddress: '0xYourAddress'
+    }
+
+    const sdk = new FusionSDK({
+      url: 'https://api.1inch.dev/fusion',
+      network: NetworkEnum.POLYGON,
+      blockchainProvider: connector,
+      authKey: 'your-api-key'
+    })
+    ```
+  </Tab>
+</Tabs>
+
+See the [Native token swaps guide](/guides/native-token-swaps) for complete details.
+
+### Gas costs
+
+Gas costs vary significantly between networks and affect auction pricing:
+
+| Network | Avg Gas Cost | Speed | Notes |
+|---------|-------------|-------|-------|
+| **Ethereum** | High (20-100+ gwei) | 12s blocks | Highest liquidity, highest costs |
+| **Polygon** | Very Low | 2s blocks | Very cheap, good liquidity |
+| **BNB Chain** | Low (3-5 gwei) | 3s blocks | Balanced cost/liquidity |
+| **Arbitrum** | Low | Sub-second | L2 benefits, growing liquidity |
+| **Optimism** | Low | Sub-second | L2 benefits, good liquidity |
+| **Base** | Low | Sub-second | Newer, growing ecosystem |
+| **Avalanche** | Low (25 nAVAX) | Sub-second | Fast, low cost |
+| **zkSync** | Low | Sub-second | ZK-rollup benefits |
+
+<Note>
+Gas costs are automatically factored into auction pricing. Higher gas networks may have slightly worse effective rates to compensate resolvers.
+</Note>
+
+### Liquidity and execution
+
+Network liquidity affects execution quality:
+
+<Tabs>
+  <Tab title="High liquidity">
+    **Networks**: Ethereum, BNB Chain, Polygon
+
+    - More resolvers active
+    - Better execution rates
+    - Faster fills
+    - Recommended for large swaps
+  </Tab>
+
+  <Tab title="Medium liquidity">
+    **Networks**: Arbitrum, Optimism, Avalanche
+
+    - Good resolver coverage
+    - Competitive rates for major pairs
+    - Slightly longer auction times
+    - Good for most use cases
+  </Tab>
+
+  <Tab title="Growing liquidity">
+    **Networks**: Base, zkSync, Linea, Sonic, Unichain
+
+    - Expanding resolver networks
+    - May have longer auction times
+    - Best for smaller swaps
+    - Check liquidity before large orders
+  </Tab>
+</Tabs>
+
+## RPC provider setup
+
+Each network requires its own RPC provider:
+
+```typescript
+import { JsonRpcProvider } from 'ethers'
+import { PrivateKeyProviderConnector, Web3Like } from '@1inch/fusion-sdk'
+
+// Network-specific RPC URLs
+const RPC_URLS = {
+  [NetworkEnum.ETHEREUM]: 'https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY',
+  [NetworkEnum.POLYGON]: 'https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY',
+  [NetworkEnum.BINANCE]: 'https://bsc-dataseed.binance.org',
+  [NetworkEnum.ARBITRUM]: 'https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY',
+  [NetworkEnum.OPTIMISM]: 'https://opt-mainnet.g.alchemy.com/v2/YOUR_KEY'
+  // ... other networks
+}
+
+// Create provider for specific network
+function createProvider(network: NetworkEnum) {
+  const rpcUrl = RPC_URLS[network]
+  const ethersProvider = new JsonRpcProvider(rpcUrl)
+  
+  const web3Like: Web3Like = {
+    eth: {
+      call(transactionConfig): Promise<string> {
+        return ethersProvider.call(transactionConfig)
+      }
+    },
+    extend(): void {}
+  }
+  
+  return new PrivateKeyProviderConnector(
+    'YOUR_PRIVATE_KEY',
+    web3Like
+  )
+}
+
+// Use it
+const connector = createProvider(NetworkEnum.ETHEREUM)
+```
+
+## Multi-network support
+
+For applications supporting multiple networks:
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+class MultiNetworkFusion {
+  private sdks: Map<NetworkEnum, FusionSDK> = new Map()
+
+  constructor(private authKey: string) {
+    // Initialize SDKs for supported networks
+    const networks = [
+      NetworkEnum.ETHEREUM,
+      NetworkEnum.POLYGON,
+      NetworkEnum.BINANCE,
+      NetworkEnum.ARBITRUM
+    ]
+
+    for (const network of networks) {
+      const connector = createProvider(network) // From above
+      
+      this.sdks.set(network, new FusionSDK({
+        url: 'https://api.1inch.dev/fusion',
+        network,
+        blockchainProvider: connector,
+        authKey: this.authKey
+      }))
+    }
+  }
+
+  async getQuote(network: NetworkEnum, params: QuoteParams) {
+    const sdk = this.sdks.get(network)
+    if (!sdk) throw new Error(`Network ${network} not supported`)
+    
+    return sdk.getQuote(params)
+  }
+
+  async placeOrder(network: NetworkEnum, params: OrderParams) {
+    const sdk = this.sdks.get(network)
+    if (!sdk) throw new Error(`Network ${network} not supported`)
+    
+    return sdk.placeOrder(params)
+  }
+}
+
+// Usage
+const fusion = new MultiNetworkFusion('your-api-key')
+
+// Swap on Ethereum
+await fusion.placeOrder(NetworkEnum.ETHEREUM, {
+  fromTokenAddress: '0x...',
+  toTokenAddress: '0x...',
+  amount: '1000000000000000000',
+  walletAddress: '0xYourAddress'
+})
+
+// Swap on Polygon
+await fusion.placeOrder(NetworkEnum.POLYGON, {
+  fromTokenAddress: '0x...',
+  toTokenAddress: '0x...',
+  amount: '1000000000000000000',
+  walletAddress: '0xYourAddress'
+})
+```
+
+## Network selection best practices
+
+<Steps>
+  <Step title="Consider liquidity">
+    Choose networks with good liquidity for your token pair. Check active orders on your target network before placing large swaps.
+  </Step>
+
+  <Step title="Factor in gas costs">
+    For small swaps, L2s and sidechains may provide better net value after gas costs.
+  </Step>
+
+  <Step title="Check resolver activity">
+    More active resolvers mean better execution. Ethereum typically has the most resolver competition.
+  </Step>
+
+  <Step title="Test first">
+    Always test with small amounts on a new network before placing large orders.
+  </Step>
+</Steps>
+
+## Network contract addresses
+
+The 1inch Limit Order V4 contract is deployed at the same address across all networks:
+
+```typescript
+const LIMIT_ORDER_V4_ADDRESS = '0x111111125421ca6dc452d289314280a0f8842a65'
+```
+
+This is the contract you need to approve for token allowances.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get started with your first swap
+  </Card>
+  <Card title="Native token swaps" icon="coins" href="/guides/native-token-swaps">
+    Learn about network-specific native tokens
+  </Card>
+  <Card title="Configuration" icon="gear" href="/api/configuration">
+    Complete configuration reference
+  </Card>
+  <Card title="Placing orders" icon="paper-plane" href="/guides/placing-orders">
+    Step-by-step order creation guide
+  </Card>
+</CardGroup>

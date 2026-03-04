@@ -1,0 +1,379 @@
+---
+title: "Whitelist"
+description: "Control resolver access with time-based whitelisting"
+---
+
+## Overview
+
+The `Whitelist` class manages resolver access control for Fusion orders. It defines:
+
+- Which addresses can resolve the order
+- When each address gains access
+- Exclusive resolver periods
+
+Whitelisting enables priority access for preferred resolvers while eventually opening to all whitelisted addresses.
+
+## Constructor
+
+Whitelist uses static factory methods instead of direct construction.
+
+## Static Methods
+
+### Whitelist.new()
+
+Creates a new whitelist with time-based resolver access.
+
+<ParamField path="resolvingStartTime" type="bigint" required>
+  Unix timestamp (seconds) when first resolver can start
+</ParamField>
+
+<ParamField path="whitelist" type="array" required>
+  Array of whitelisted resolvers
+  
+  <ParamField path="address" type="Address" required>
+    Resolver wallet address
+  </ParamField>
+  
+  <ParamField path="allowFrom" type="bigint" required>
+    Unix timestamp (seconds) when this resolver can start filling
+  </ParamField>
+</ParamField>
+
+```typescript
+import {Whitelist, Address} from '@1inch/fusion-sdk'
+
+const resolvingStartTime = 1673548149n
+const whitelist = Whitelist.new(
+    resolvingStartTime,
+    [
+        {
+            address: new Address('0x111111111117dc0aa78b770fa6a738034120c302'),
+            allowFrom: resolvingStartTime
+        },
+        {
+            address: new Address('0x222222222227dc0aa78b770fa6a738034120c302'),
+            allowFrom: resolvingStartTime + 10n
+        }
+    ]
+)
+```
+
+<ResponseField name="return" type="Whitelist">
+  Configured Whitelist instance
+</ResponseField>
+
+### Whitelist.fromNow()
+
+Creates a whitelist starting from the current time.
+
+<ParamField path="whitelist" type="array" required>
+  Array of whitelisted resolvers with allowFrom timestamps
+</ParamField>
+
+```typescript
+import {Whitelist, Address} from '@1inch/fusion-sdk'
+
+const whitelist = Whitelist.fromNow([
+    {
+        address: new Address('0x111111111117dc0aa78b770fa6a738034120c302'),
+        allowFrom: Date.now() / 1000
+    }
+])
+```
+
+<ResponseField name="return" type="Whitelist">
+  Whitelist starting from current time
+</ResponseField>
+
+### Whitelist.decode()
+
+Decodes a whitelist from hex bytes.
+
+<ParamField path="bytes" type="string" required>
+  Hex-encoded whitelist data with 0x prefix
+</ParamField>
+
+```typescript
+const whitelist = Whitelist.decode('0x...')
+```
+
+<ResponseField name="return" type="Whitelist">
+  Decoded Whitelist instance
+</ResponseField>
+
+### Whitelist.decodeFrom()
+
+Decodes a whitelist from a BytesIter.
+
+<ParamField path="bytes" type="BytesIter<string | bigint>" required>
+  BytesIter positioned at whitelist data
+</ParamField>
+
+```typescript
+const iter = BytesIter.HexString('0x...')
+const whitelist = Whitelist.decodeFrom(iter)
+```
+
+<ResponseField name="return" type="Whitelist">
+  Decoded Whitelist instance
+</ResponseField>
+
+## Methods
+
+### encode()
+
+Serializes whitelist to hex bytes.
+
+```typescript
+const encoded = whitelist.encode()
+// => '0x...'
+```
+
+<ResponseField name="return" type="string">
+  Hex-encoded whitelist with 0x prefix
+</ResponseField>
+
+### encodeInto()
+
+Serializes whitelist into a BytesBuilder.
+
+<ParamField path="builder" type="BytesBuilder">
+  Optional BytesBuilder instance (creates new if not provided)
+</ParamField>
+
+```typescript
+const builder = new BytesBuilder()
+whitelist.encodeInto(builder)
+```
+
+<ResponseField name="return" type="BytesBuilder">
+  Builder with encoded whitelist data
+</ResponseField>
+
+### canExecuteAt()
+
+Checks if an address can resolve the order at a specific time.
+
+<ParamField path="executor" type="Address" required>
+  Resolver address to check
+</ParamField>
+
+<ParamField path="executionTime" type="bigint" required>
+  Unix timestamp (seconds) to check
+</ParamField>
+
+```typescript
+import {Whitelist, Address, now} from '@1inch/fusion-sdk'
+
+const canExecute = whitelist.canExecuteAt(
+    new Address('0x222222222227dc0aa78b770fa6a738034120c302'),
+    now()
+)
+// => false (if before allowFrom time)
+```
+
+<ResponseField name="return" type="boolean">
+  True if executor can fill at that time
+</ResponseField>
+
+### isExclusiveResolver()
+
+Checks if an address has exclusive first-fill rights.
+
+<ParamField path="wallet" type="Address" required>
+  Resolver address to check
+</ParamField>
+
+```typescript
+const isExclusive = whitelist.isExclusiveResolver(
+    new Address('0x111111111117dc0aa78b770fa6a738034120c302')
+)
+// => true (if first in whitelist and has delay before next)
+```
+
+<ResponseField name="return" type="boolean">
+  True if wallet has exclusive access period
+</ResponseField>
+
+### isExclusivityPeriod()
+
+Checks if the whitelist is currently in an exclusivity period.
+
+<ParamField path="time" type="bigint">
+  Unix timestamp to check (defaults to now)
+</ParamField>
+
+```typescript
+import {now} from '@1inch/fusion-sdk'
+
+const isExclusive = whitelist.isExclusivityPeriod(now() + 5n)
+// => true (if within exclusive period)
+```
+
+<ResponseField name="return" type="boolean">
+  True if in exclusivity period at given time
+</ResponseField>
+
+### isWhitelisted()
+
+Checks if an address is in the whitelist.
+
+<ParamField path="address" type="Address" required>
+  Address to check
+</ParamField>
+
+```typescript
+const whitelisted = whitelist.isWhitelisted(
+    new Address('0x111111111117dc0aa78b770fa6a738034120c302')
+)
+```
+
+<ResponseField name="return" type="boolean">
+  True if address is whitelisted
+</ResponseField>
+
+### equal()
+
+Compares two whitelists for equality.
+
+<ParamField path="other" type="Whitelist" required>
+  Whitelist to compare
+</ParamField>
+
+```typescript
+const isEqual = whitelist.equal(otherWhitelist)
+```
+
+<ResponseField name="return" type="boolean">
+  True if whitelists are identical
+</ResponseField>
+
+## Properties
+
+<ResponseField name="resolvingStartTime" type="bigint">
+  Unix timestamp when resolving begins
+</ResponseField>
+
+<ResponseField name="whitelist" type="WhitelistItem[]">
+  Array of whitelist entries with addressHalf and delay
+</ResponseField>
+
+<ResponseField name="length" type="number">
+  Number of whitelisted addresses
+</ResponseField>
+
+## Examples
+
+### Encode/Decode Whitelist
+
+```typescript
+import {Whitelist, now, Address} from '@1inch/fusion-sdk'
+
+const resolvingStartTime = now()
+const whitelist = Whitelist.new(
+    resolvingStartTime,
+    [
+        {
+            address: new Address('0x111111111117dc0aa78b770fa6a738034120c302'),
+            allowFrom: resolvingStartTime
+        },
+        {
+            address: new Address('0x222222222227dc0aa78b770fa6a738034120c302'),
+            allowFrom: resolvingStartTime + 10n
+        }
+    ]
+)
+
+const encoded = whitelist.encode() // => '0x...'
+const decoded = Whitelist.decode(encoded) // => same as whitelist
+```
+
+### Check Exclusivity
+
+```typescript
+import {Whitelist, now, Address} from '@1inch/fusion-sdk'
+
+const resolvingStartTime = now()
+const whitelist = Whitelist.new(
+    resolvingStartTime,
+    [
+        {
+            address: new Address('0x111111111117dc0aa78b770fa6a738034120c302'),
+            allowFrom: resolvingStartTime
+        },
+        {
+            address: new Address('0x222222222227dc0aa78b770fa6a738034120c302'),
+            allowFrom: resolvingStartTime + 10n
+        }
+    ]
+)
+
+const isExclusive = whitelist.isExclusiveResolver(
+    new Address('0x111111111117dc0aa78b770fa6a738034120c302')
+) // => true
+
+const isExclusivityPeriod = whitelist.isExclusivityPeriod(
+    resolvingStartTime + 5n
+) // => true
+
+const canExecuteNow = whitelist.canExecuteAt(
+    new Address('0x222222222227dc0aa78b770fa6a738034120c302'),
+    resolvingStartTime
+) // => false (must wait 10 seconds)
+
+const canExecuteLater = whitelist.canExecuteAt(
+    new Address('0x222222222227dc0aa78b770fa6a738034120c302'),
+    resolvingStartTime + 10n
+) // => true
+```
+
+## How Whitelisting Works
+
+1. **Resolving Start Time**: Global start time for the order
+2. **Sequential Access**: Each resolver gets access at their `allowFrom` time
+3. **Relative Delays**: Internally stored as delays between resolvers for efficiency
+4. **Exclusivity**: First resolver with delayed access has exclusive period
+5. **Address Matching**: Uses last 10 bytes of address for gas optimization
+
+## Use Cases
+
+### Private Resolver
+
+```typescript
+// Single resolver, indefinite exclusivity
+const whitelist = Whitelist.new(now(), [
+    {
+        address: resolverAddress,
+        allowFrom: now()
+    }
+])
+```
+
+### Timed Fallback
+
+```typescript
+// Preferred resolver has 30 seconds, then fallback
+const startTime = now()
+const whitelist = Whitelist.new(startTime, [
+    {
+        address: preferredResolver,
+        allowFrom: startTime
+    },
+    {
+        address: fallbackResolver,
+        allowFrom: startTime + 30n
+    }
+])
+```
+
+### Public Auction
+
+```typescript
+// All resolvers access simultaneously
+const startTime = now()
+const whitelist = Whitelist.new(startTime, [
+    {address: resolver1, allowFrom: startTime},
+    {address: resolver2, allowFrom: startTime},
+    {address: resolver3, allowFrom: startTime}
+])
+```

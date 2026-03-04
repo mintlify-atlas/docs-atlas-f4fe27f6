@@ -1,0 +1,491 @@
+---
+title: "Types"
+description: "Key type definitions for the Fusion SDK"
+---
+
+## Overview
+
+This page documents the main types exported by the Fusion SDK that are used across various SDK methods.
+
+## SDK Configuration
+
+### QuoteParams
+
+Parameters for requesting a quote from the Fusion API.
+
+<ParamField path="fromTokenAddress" type="string" required>
+  Source token contract address
+</ParamField>
+
+<ParamField path="toTokenAddress" type="string" required>
+  Destination token contract address
+</ParamField>
+
+<ParamField path="amount" type="string" required>
+  Amount of source token to swap (in token's smallest unit)
+</ParamField>
+
+<ParamField path="walletAddress" type="string">
+  Maker's wallet address
+</ParamField>
+
+<ParamField path="enableEstimate" type="boolean">
+  Enable amount estimation
+</ParamField>
+
+<ParamField path="permit" type="string">
+  Permit signature for gasless approval
+</ParamField>
+
+<ParamField path="integratorFee" type="IntegratorFeeRequest">
+  Fee configuration for integrators
+</ParamField>
+
+<ParamField path="source" type="string">
+  Integration source identifier
+</ParamField>
+
+<ParamField path="isPermit2" type="boolean">
+  Use Permit2 for approval
+</ParamField>
+
+<ParamField path="slippage" type="number">
+  Slippage tolerance in percent (1-50). Example: 1 for 1%
+</ParamField>
+
+### OrderParams
+
+Parameters for creating a Fusion order.
+
+<ParamField path="fromTokenAddress" type="string" required>
+  Source token contract address
+</ParamField>
+
+<ParamField path="toTokenAddress" type="string" required>
+  Destination token contract address
+</ParamField>
+
+<ParamField path="amount" type="string" required>
+  Amount of source token to swap (in token's smallest unit)
+</ParamField>
+
+<ParamField path="walletAddress" type="string" required>
+  Maker's wallet address
+</ParamField>
+
+<ParamField path="permit" type="string">
+  Permit signature without the first 20 bytes of token address
+</ParamField>
+
+<ParamField path="receiver" type="string">
+  Address to receive the destination tokens. Defaults to walletAddress
+</ParamField>
+
+<ParamField path="preset" type="PresetEnum">
+  Auction speed preset. Defaults to recommended preset from quote
+</ParamField>
+
+<ParamField path="nonce" type="bigint">
+  Unique nonce for the wallet address. Can be serial or randomly generated using `randBigInt`
+</ParamField>
+
+<ParamField path="source" type="string">
+  Integration source identifier
+</ParamField>
+
+<ParamField path="isPermit2" type="boolean">
+  Use Permit2 for approval
+</ParamField>
+
+<ParamField path="customPreset" type="CustomPreset">
+  Custom auction parameters
+</ParamField>
+
+<ParamField path="orderExpirationDelay" type="bigint">
+  Order expiration delay after auction ends. Default: 12 seconds
+</ParamField>
+
+<ParamField path="allowPartialFills" type="boolean">
+  Allow order to be partially filled. Default: true
+</ParamField>
+
+<ParamField path="allowMultipleFills" type="boolean">
+  Allow order to be filled multiple times. Default: true
+</ParamField>
+
+<ParamField path="integratorFee" type="IntegratorFeeRequest">
+  Fee configuration for integrators
+</ParamField>
+
+<ParamField path="slippage" type="number">
+  Slippage tolerance in percent (1-50)
+</ParamField>
+
+## Fee Types
+
+### IntegratorFeeRequest
+
+Integrator fee parameters for SDK requests (used in `getQuote()` and `placeOrder()`).
+
+<ParamField path="receiver" type="Address" required>
+  Address which will receive the integrator's portion of the fee
+</ParamField>
+
+<ParamField path="value" type="Bps" required>
+  Fee amount in basis points (1% = 100 bps)
+</ParamField>
+
+### IntegratorFeeResponse
+
+Integrator fee parameters from API responses. Contains authoritative values calculated by the backend.
+
+<ParamField path="receiver" type="Address" required>
+  Address which will receive `share` of `value` fee. The remaining portion goes to the protocol
+</ParamField>
+
+<ParamField path="value" type="Bps" required>
+  Total fee amount in basis points
+</ParamField>
+
+<ParamField path="share" type="Bps" required>
+  Percentage of the fee that the integrator receives (rest goes to protocol)
+</ParamField>
+
+## Enums
+
+### PresetEnum
+
+Auction speed presets.
+
+```typescript
+enum PresetEnum {
+  fast = 'fast',
+  medium = 'medium',
+  slow = 'slow',
+  custom = 'custom'
+}
+```
+
+<ParamField path="fast" type="string">
+  Fast auction (shorter duration, higher initial premium)
+</ParamField>
+
+<ParamField path="medium" type="string">
+  Medium-speed auction (balanced duration and premium)
+</ParamField>
+
+<ParamField path="slow" type="string">
+  Slow auction (longer duration, lower initial premium)
+</ParamField>
+
+<ParamField path="custom" type="string">
+  Custom auction parameters
+</ParamField>
+
+### OrderStatus
+
+Possible order statuses.
+
+```typescript
+enum OrderStatus {
+  Pending = 'pending',
+  Filled = 'filled',
+  PartiallyFilled = 'partially-filled',
+  Expired = 'expired',
+  Cancelled = 'cancelled',
+  FalsePredicate = 'false-predicate',
+  NotEnoughBalanceOrAllowance = 'not-enough-balance-or-allowance',
+  WrongPermit = 'wrong-permit',
+  InvalidSignature = 'invalid-signature'
+}
+```
+
+<ParamField path="Pending" type="string">
+  Order is active and waiting to be filled
+</ParamField>
+
+<ParamField path="Filled" type="string">
+  Order has been completely filled
+</ParamField>
+
+<ParamField path="PartiallyFilled" type="string">
+  Order has been partially filled
+</ParamField>
+
+<ParamField path="Expired" type="string">
+  Order has expired
+</ParamField>
+
+<ParamField path="Cancelled" type="string">
+  Order has been cancelled
+</ParamField>
+
+<ParamField path="FalsePredicate" type="string">
+  Order predicate evaluation returned false
+</ParamField>
+
+<ParamField path="NotEnoughBalanceOrAllowance" type="string">
+  Insufficient balance or allowance
+</ParamField>
+
+<ParamField path="WrongPermit" type="string">
+  Permit signature is invalid
+</ParamField>
+
+<ParamField path="InvalidSignature" type="string">
+  Order signature is invalid
+</ParamField>
+
+### NetworkEnum
+
+Supported blockchain networks.
+
+```typescript
+enum NetworkEnum {
+  ETHEREUM = 1,
+  POLYGON = 137,
+  ZKSYNC = 324,
+  BINANCE = 56,
+  ARBITRUM = 42161,
+  AVALANCHE = 43114,
+  OPTIMISM = 10,
+  FANTOM = 250,
+  GNOSIS = 100,
+  COINBASE = 8453,
+  LINEA = 59144,
+  SONIC = 146,
+  UNICHAIN = 130
+}
+```
+
+## Core Types
+
+### Address
+
+Wrapped Ethereum address type from `@1inch/limit-order-sdk`.
+
+```typescript
+import { Address } from '@1inch/fusion-sdk'
+
+const address = new Address('0x1111111254EEB25477B68fb85Ed929f73A960582')
+```
+
+<ParamField path="ZERO_ADDRESS" type="Address">
+  Static property: 0x0000000000000000000000000000000000000000
+</ParamField>
+
+### MakerTraits
+
+Maker traits for limit orders. See [@1inch/limit-order-sdk documentation](https://github.com/1inch/limit-order-sdk).
+
+```typescript
+import { MakerTraits } from '@1inch/fusion-sdk'
+```
+
+### Bps
+
+Basis points type (1% = 100 bps).
+
+```typescript
+import { Bps } from '@1inch/fusion-sdk'
+
+const fee = new Bps(100) // 1%
+```
+
+## Order Types
+
+### OrderInfo
+
+Signed order information ready for submission.
+
+<ParamField path="order" type="LimitOrderV4Struct" required>
+  The limit order structure
+</ParamField>
+
+<ParamField path="signature" type="string" required>
+  Order signature
+</ParamField>
+
+<ParamField path="quoteId" type="string" required>
+  Quote identifier from the API
+</ParamField>
+
+<ParamField path="orderHash" type="string" required>
+  Order hash
+</ParamField>
+
+<ParamField path="extension" type="string" required>
+  Order extension data
+</ParamField>
+
+### PreparedOrder
+
+Prepared order before signing.
+
+<ParamField path="order" type="FusionOrder" required>
+  The Fusion order object
+</ParamField>
+
+<ParamField path="hash" type="string" required>
+  Order hash
+</ParamField>
+
+<ParamField path="quoteId" type="string" required>
+  Quote identifier from the API
+</ParamField>
+
+<ParamField path="nativeOrderFactory" type="Address">
+  Native order factory address (for native token swaps)
+</ParamField>
+
+### OrderStatusResponse
+
+Detailed order status information from the API.
+
+<ParamField path="status" type="OrderStatus" required>
+  Current order status
+</ParamField>
+
+<ParamField path="order" type="LimitOrderV4Struct" required>
+  The order structure
+</ParamField>
+
+<ParamField path="extension" type="string" required>
+  Order extension data
+</ParamField>
+
+<ParamField path="points" type="AuctionPoint[] | null" required>
+  Auction points defining the rate curve
+</ParamField>
+
+<ParamField path="cancelTx" type="string | null" required>
+  Cancellation transaction hash if cancelled
+</ParamField>
+
+<ParamField path="fills" type="Fill[]" required>
+  Array of fill events
+</ParamField>
+
+<ParamField path="createdAt" type="string" required>
+  Order creation timestamp
+</ParamField>
+
+<ParamField path="auctionStartDate" type="number" required>
+  Auction start date as Unix timestamp
+</ParamField>
+
+<ParamField path="auctionDuration" type="number" required>
+  Auction duration in seconds
+</ParamField>
+
+<ParamField path="initialRateBump" type="number" required>
+  Initial rate bump value
+</ParamField>
+
+<ParamField path="isNativeCurrency" type="boolean" required>
+  Whether the order involves native currency
+</ParamField>
+
+<ParamField path="fromTokenToUsdPrice" type="string" required>
+  Source token price in USD
+</ParamField>
+
+<ParamField path="toTokenToUsdPrice" type="string" required>
+  Destination token price in USD
+</ParamField>
+
+### Fill
+
+Information about a fill event.
+
+<ParamField path="txHash" type="string" required>
+  Transaction hash of the fill
+</ParamField>
+
+<ParamField path="filledMakerAmount" type="string" required>
+  Amount of maker token filled
+</ParamField>
+
+<ParamField path="filledAuctionTakerAmount" type="string" required>
+  Amount of taker token filled at auction rate
+</ParamField>
+
+<ParamField path="takerFeeAmount" type="string | null" required>
+  Taker fee amount if applicable
+</ParamField>
+
+## Custom Preset
+
+### CustomPreset
+
+Custom auction parameters for advanced users.
+
+<ParamField path="auctionDuration" type="number" required>
+  Duration of the auction in seconds
+</ParamField>
+
+<ParamField path="auctionStartAmount" type="string" required>
+  Starting amount for the auction
+</ParamField>
+
+<ParamField path="auctionEndAmount" type="string" required>
+  Ending amount for the auction
+</ParamField>
+
+<ParamField path="points" type="CustomPresetPoint[]">
+  Custom auction points defining the rate curve
+</ParamField>
+
+### CustomPresetPoint
+
+<ParamField path="toTokenAmount" type="string" required>
+  Token amount at this point
+</ParamField>
+
+<ParamField path="delay" type="number" required>
+  Delay in seconds relative to previous point
+</ParamField>
+
+## Example Usage
+
+```typescript
+import {
+  FusionSDK,
+  NetworkEnum,
+  PresetEnum,
+  OrderParams,
+  QuoteParams,
+  Address,
+  Bps
+} from '@1inch/fusion-sdk'
+
+// Quote parameters
+const quoteParams: QuoteParams = {
+  fromTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  amount: '1000000000',
+  walletAddress: '0x...',
+  integratorFee: {
+    receiver: new Address('0x...'),
+    value: new Bps(100) // 1%
+  },
+  slippage: 1 // 1%
+}
+
+// Order parameters
+const orderParams: OrderParams = {
+  fromTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  amount: '1000000000',
+  walletAddress: '0x...',
+  preset: PresetEnum.fast,
+  allowPartialFills: true,
+  allowMultipleFills: true
+}
+```
+
+## See Also
+
+- [FusionSDK Class](/api/fusion-sdk)
+- [AuctionCalculator](/api/auction-calculator)
+- [Connectors](/api/connectors)

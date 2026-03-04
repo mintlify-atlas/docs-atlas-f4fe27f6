@@ -1,0 +1,259 @@
+---
+title: "AuctionDetails"
+description: "Configure Dutch auction pricing curves for Fusion orders"
+---
+
+## Overview
+
+The `AuctionDetails` class encapsulates auction parameters including:
+
+- Auction start time and duration
+- Initial rate bump (starting premium)
+- Price curve definition via points
+- Gas cost adjustments
+
+These parameters define how the order's price improves over time, creating a Dutch auction where resolvers compete to fill the order at the best price.
+
+## Constructor
+
+Creates a new AuctionDetails instance.
+
+<ParamField path="auction" type="object" required>
+  Auction configuration parameters
+  
+  <ParamField path="startTime" type="bigint" required>
+    Unix timestamp in seconds when the auction begins
+  </ParamField>
+  
+  <ParamField path="duration" type="bigint" required>
+    Auction duration in seconds (max: 16,777,215)
+  </ParamField>
+  
+  <ParamField path="initialRateBump" type="number" required>
+    Starting price premium as ratio of startTakingAmount to endTakingAmount. 
+    Scale: 10,000,000 = 100%. Example: 50,000 = 0.5%
+  </ParamField>
+  
+  <ParamField path="points" type="AuctionPoint[]" required>
+    Array defining the price curve
+    
+    <ParamField path="coefficient" type="number" required>
+      Rate bump for auctionEndAmount at this point. Scale: 10,000,000 = 100%
+    </ParamField>
+    
+    <ParamField path="delay" type="number" required>
+      Time in seconds relative to previous point (or auction start for first point)
+    </ParamField>
+  </ParamField>
+  
+  <ParamField path="gasCost" type="AuctionGasCostInfo">
+    Gas cost estimation for dynamic adjustments
+    
+    <ParamField path="gasBumpEstimate" type="bigint" required>
+      Rate bump to cover gas costs. Ratio of gasCostInToToken to endTakingAmount. 
+      Scale: 10,000,000 = 100%
+    </ParamField>
+    
+    <ParamField path="gasPriceEstimate" type="bigint" required>
+      Gas price at estimation time. Scale: 1000 = 1 Gwei
+    </ParamField>
+  </ParamField>
+</ParamField>
+
+## Methods
+
+### encode()
+
+Serializes auction data to bytes for on-chain use.
+
+```typescript
+const encoded = details.encode()
+// => '0x63c051750000b400c350009c40000a009c40000a'
+```
+
+<ResponseField name="return" type="string">
+  Hex-encoded auction data with 0x prefix
+</ResponseField>
+
+### encodeInto()
+
+Serializes auction data into a BytesBuilder.
+
+<ParamField path="builder" type="BytesBuilder">
+  Optional BytesBuilder instance (creates new if not provided)
+</ParamField>
+
+```typescript
+const builder = new BytesBuilder()
+details.encodeInto(builder)
+```
+
+<ResponseField name="return" type="BytesBuilder">
+  Builder with encoded auction data
+</ResponseField>
+
+## Properties
+
+<ResponseField name="startTime" type="bigint">
+  Auction start timestamp (Unix seconds)
+</ResponseField>
+
+<ResponseField name="duration" type="bigint">
+  Auction duration in seconds
+</ResponseField>
+
+<ResponseField name="initialRateBump" type="bigint">
+  Initial rate bump value
+</ResponseField>
+
+<ResponseField name="points" type="AuctionPoint[]">
+  Price curve points
+</ResponseField>
+
+<ResponseField name="gasCost" type="object">
+  Gas cost configuration
+  
+  <ResponseField name="gasBumpEstimate" type="bigint">
+    Rate bump to cover gas (10,000,000 = 100%)
+  </ResponseField>
+  
+  <ResponseField name="gasPriceEstimate" type="bigint">
+    Estimated gas price (1000 = 1 Gwei)
+  </ResponseField>
+</ResponseField>
+
+## Static Methods
+
+### decode()
+
+Decodes auction details from hex bytes.
+
+<ParamField path="data" type="string" required>
+  Hex-encoded auction data with 0x prefix
+</ParamField>
+
+```typescript
+import {AuctionDetails} from '@1inch/fusion-sdk'
+
+const details = AuctionDetails.decode('0x63c051750000b400c350009c40000a009c40000a')
+```
+
+<ResponseField name="return" type="AuctionDetails">
+  Decoded AuctionDetails instance
+</ResponseField>
+
+### decodeFrom()
+
+Decodes auction details from a BytesIter.
+
+<ParamField path="iter" type="BytesIter<bigint | string>" required>
+  BytesIter positioned at auction data
+</ParamField>
+
+```typescript
+const iter = BytesIter.BigInt('0x...')
+const details = AuctionDetails.decodeFrom(iter)
+```
+
+<ResponseField name="return" type="AuctionDetails">
+  Decoded AuctionDetails instance
+</ResponseField>
+
+### fromExtension()
+
+Extracts auction details from a limit order extension.
+
+<ParamField path="extension" type="Extension" required>
+  Extension object containing auction data
+</ParamField>
+
+```typescript
+const details = AuctionDetails.fromExtension(extension)
+```
+
+<ResponseField name="return" type="AuctionDetails">
+  Extracted AuctionDetails instance
+</ResponseField>
+
+## Example
+
+```typescript
+import {AuctionDetails} from '@1inch/fusion-sdk'
+
+const details = new AuctionDetails({
+    duration: 180n, // 3 minutes
+    startTime: 1673548149n, // Unix timestamp
+    /**
+     * Starting premium: 0.5%
+     * Defined as ratio of startTakingAmount to endTakingAmount
+     * 10,000,000 = 100%
+     */
+    initialRateBump: 50000,
+    /**
+     * Points defining the price curve:
+     * 
+     * y(rate) ▲
+     *         │
+     *    5000 │\\
+     *         │ \\
+     *         │  \\
+     *    4000 │   \\───────
+     *         │           \\
+     *         │            \\
+     *    3000 │             \\
+     *         │              \\
+     *         └─────────────────────────►
+     *         0   10     20  end   x(time)
+     */
+    points: [
+        {
+            delay: 10, // 10 seconds from auction start
+            coefficient: 40000 // 0.4% rate bump
+        },
+        {
+            delay: 10, // 10 seconds from previous point
+            coefficient: 40000 // 0.4% rate bump
+        }
+    ],
+    /**
+     * Adjusts estimated gas costs to actual onchain costs
+     */
+    gasCost: {
+        /**
+         * Rate bump to cover gas: 0.1%
+         * Ratio of gasCostInToToken to endTakingAmount
+         */
+        gasBumpEstimate: 10_000n,
+        /**
+         * Gas price estimate: 1 Gwei
+         */
+        gasPriceEstimate: 1000n
+    }
+})
+
+const encoded = details.encode()
+// => '0x63c051750000b400c350009c40000a009c40000a'
+
+// Decode back
+const decoded = AuctionDetails.decode(encoded)
+```
+
+## Price Curve Mechanics
+
+The auction price starts high and decreases over time according to the defined points:
+
+1. **Initial Rate Bump**: Premium at auction start
+2. **Points**: Define how quickly price decreases
+3. **Coefficient**: Rate adjustment at each point
+4. **Delay**: Time between points
+
+Resolvers monitor the price curve and fill when profitable. Earlier fills get worse prices but guaranteed execution; later fills get better prices but risk being frontrun.
+
+## Gas Cost Adjustment
+
+The `gasCost` parameter allows dynamic gas compensation:
+
+- **gasBumpEstimate**: Expected gas cost as rate bump
+- **gasPriceEstimate**: Gas price when estimate was made
+
+On-chain, actual gas costs are calculated and adjusted proportionally, ensuring resolvers are compensated for current gas prices rather than estimated prices.

@@ -1,0 +1,482 @@
+---
+title: FusionSDK
+description: Main SDK class for interacting with 1inch Fusion Mode
+---
+
+The `FusionSDK` class provides high-level functionality for working with 1inch Fusion Mode. It handles order creation, submission, querying, and management.
+
+## Constructor
+
+Creates a new instance of the FusionSDK.
+
+```typescript
+const sdk = new FusionSDK(config)
+```
+
+<ParamField path="config" type="FusionSDKConfigParams" required>
+  Configuration object for the SDK
+  
+  <ParamField path="config.url" type="string" required>
+    API endpoint URL (e.g., `https://api.1inch.dev/fusion`)
+  </ParamField>
+  
+  <ParamField path="config.network" type="NetworkEnum" required>
+    Network to operate on (e.g., `NetworkEnum.ETHEREUM`)
+  </ParamField>
+  
+  <ParamField path="config.authKey" type="string">
+    Authentication key for API access
+  </ParamField>
+  
+  <ParamField path="config.blockchainProvider" type="BlockchainProviderConnector">
+    Custom blockchain provider for signing transactions
+  </ParamField>
+  
+  <ParamField path="config.httpProvider" type="HttpProviderConnector">
+    Custom HTTP provider (defaults to axios)
+  </ParamField>
+</ParamField>
+
+## Methods
+
+### getActiveOrders
+
+Retrieves a paginated list of active orders from the Fusion API.
+
+```typescript
+const orders = await sdk.getActiveOrders({ page: 1, limit: 10 })
+```
+
+<ParamField path="params" type="ActiveOrdersRequestParams">
+  Pagination parameters
+  
+  <ParamField path="params.page" type="number">
+    Page number (default: 1)
+  </ParamField>
+  
+  <ParamField path="params.limit" type="number">
+    Number of items per page (default: 2, min: 1, max: 500)
+  </ParamField>
+</ParamField>
+
+<ResponseField name="ActiveOrdersResponse" type="PaginationOutput<ActiveOrder>">
+  Paginated list of active orders with metadata
+</ResponseField>
+
+### getOrdersByMaker
+
+Retrieves orders created by a specific maker address.
+
+```typescript
+const orders = await sdk.getOrdersByMaker({
+  address: '0xfa80cd9b3becc0b4403b0f421384724f2810775f',
+  page: 1,
+  limit: 10
+})
+```
+
+<ParamField path="params" type="OrdersByMakerParams" required>
+  Query parameters
+  
+  <ParamField path="params.address" type="string" required>
+    Maker's wallet address
+  </ParamField>
+  
+  <ParamField path="params.page" type="number">
+    Page number (default: 1)
+  </ParamField>
+  
+  <ParamField path="params.limit" type="number">
+    Number of items per page (default: 2, min: 1, max: 500)
+  </ParamField>
+</ParamField>
+
+<ResponseField name="OrdersByMakerResponse" type="PaginationOutput<OrderFillsByMakerOutput>">
+  Paginated list of orders by maker with fill information
+</ResponseField>
+
+### getQuote
+
+Retrieves a quote for a token swap with default presets.
+
+```typescript
+const quote = await sdk.getQuote({
+  fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+  toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  amount: '1000000000000000000000'
+})
+```
+
+<ParamField path="params" type="QuoteParams" required>
+  Quote parameters
+  
+  <ParamField path="params.fromTokenAddress" type="string" required>
+    Source token contract address
+  </ParamField>
+  
+  <ParamField path="params.toTokenAddress" type="string" required>
+    Destination token contract address
+  </ParamField>
+  
+  <ParamField path="params.amount" type="string" required>
+    Amount to swap (in token's smallest unit)
+  </ParamField>
+  
+  <ParamField path="params.walletAddress" type="string">
+    Wallet address (defaults to zero address)
+  </ParamField>
+  
+  <ParamField path="params.permit" type="string">
+    EIP-2612 permit call data for gasless approval
+  </ParamField>
+  
+  <ParamField path="params.enableEstimate" type="boolean">
+    Enable gas estimation
+  </ParamField>
+  
+  <ParamField path="params.source" type="string">
+    Source identifier for analytics
+  </ParamField>
+  
+  <ParamField path="params.isPermit2" type="boolean">
+    Use Permit2 for approvals
+  </ParamField>
+  
+  <ParamField path="params.integratorFee" type="IntegratorFeeRequest">
+    Integrator fee configuration
+  </ParamField>
+  
+  <ParamField path="params.slippage" type="number">
+    Slippage tolerance in percent (1-50)
+  </ParamField>
+</ParamField>
+
+<ResponseField name="Quote" type="Quote">
+  Quote details including pricing, presets, and settlement information
+</ResponseField>
+
+### getQuoteWithCustomPreset
+
+Retrieves a quote with custom auction parameters.
+
+```typescript
+const quote = await sdk.getQuoteWithCustomPreset(
+  {
+    fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+    toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+    amount: '1000000000000000000000'
+  },
+  {
+    customPreset: {
+      auctionDuration: 180,
+      auctionStartAmount: '100000',
+      auctionEndAmount: '50000',
+      points: [
+        { toTokenAmount: '90000', delay: 20 },
+        { toTokenAmount: '70000', delay: 40 }
+      ]
+    }
+  }
+)
+```
+
+<ParamField path="params" type="QuoteParams" required>
+  Quote parameters (same as `getQuote`)
+</ParamField>
+
+<ParamField path="body" type="QuoteCustomPresetParams" required>
+  Custom preset configuration
+  
+  <ParamField path="body.customPreset" type="CustomPreset" required>
+    Custom auction preset
+    
+    <ParamField path="body.customPreset.auctionDuration" type="number" required>
+      Auction duration in seconds
+    </ParamField>
+    
+    <ParamField path="body.customPreset.auctionStartAmount" type="string" required>
+      Starting amount for auction
+    </ParamField>
+    
+    <ParamField path="body.customPreset.auctionEndAmount" type="string" required>
+      Ending amount for auction
+    </ParamField>
+    
+    <ParamField path="body.customPreset.points" type="CustomPresetPoint[]">
+      Custom auction curve points
+    </ParamField>
+  </ParamField>
+</ParamField>
+
+<ResponseField name="Quote" type="Quote">
+  Quote details with custom preset applied
+</ResponseField>
+
+### placeOrder
+
+Creates and submits a Fusion order in a single operation.
+
+```typescript
+const orderInfo = await sdk.placeOrder({
+  fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  amount: '50000000000000000',
+  walletAddress: makerAddress
+})
+```
+
+<ParamField path="params" type="OrderParams" required>
+  Order parameters
+  
+  <ParamField path="params.fromTokenAddress" type="string" required>
+    Source token contract address
+  </ParamField>
+  
+  <ParamField path="params.toTokenAddress" type="string" required>
+    Destination token contract address
+  </ParamField>
+  
+  <ParamField path="params.amount" type="string" required>
+    Amount to swap (in token's smallest unit)
+  </ParamField>
+  
+  <ParamField path="params.walletAddress" type="string" required>
+    Maker's wallet address
+  </ParamField>
+  
+  <ParamField path="params.permit" type="string">
+    EIP-2612 permit call data
+  </ParamField>
+  
+  <ParamField path="params.receiver" type="string">
+    Recipient address (defaults to maker address)
+  </ParamField>
+  
+  <ParamField path="params.preset" type="PresetEnum">
+    Auction preset: `fast`, `medium`, or `slow`
+  </ParamField>
+  
+  <ParamField path="params.nonce" type="bigint">
+    Unique nonce for batch cancellation
+  </ParamField>
+  
+  <ParamField path="params.source" type="string">
+    Source identifier for analytics
+  </ParamField>
+  
+  <ParamField path="params.isPermit2" type="boolean">
+    Use Permit2 for approvals
+  </ParamField>
+  
+  <ParamField path="params.customPreset" type="CustomPreset">
+    Custom auction parameters
+  </ParamField>
+  
+  <ParamField path="params.orderExpirationDelay" type="bigint">
+    Order expiration delay after auction ends
+  </ParamField>
+  
+  <ParamField path="params.allowPartialFills" type="boolean">
+    Allow partial order fills (default: true)
+  </ParamField>
+  
+  <ParamField path="params.allowMultipleFills" type="boolean">
+    Allow multiple fills (default: true)
+  </ParamField>
+  
+  <ParamField path="params.integratorFee" type="IntegratorFeeRequest">
+    Integrator fee configuration
+  </ParamField>
+  
+  <ParamField path="params.slippage" type="number">
+    Slippage tolerance in percent
+  </ParamField>
+</ParamField>
+
+<ResponseField name="OrderInfo" type="OrderInfo">
+  Information about the created and submitted order
+  
+  <ResponseField name="order" type="LimitOrderV4Struct">
+    The order structure
+  </ResponseField>
+  
+  <ResponseField name="signature" type="string">
+    Order signature
+  </ResponseField>
+  
+  <ResponseField name="quoteId" type="string">
+    Quote identifier
+  </ResponseField>
+  
+  <ResponseField name="orderHash" type="string">
+    Order hash
+  </ResponseField>
+  
+  <ResponseField name="extension" type="string">
+    Order extension data
+  </ResponseField>
+</ResponseField>
+
+### createOrder
+
+Creates a Fusion order without submitting it (for manual submission).
+
+```typescript
+const { order, hash, quoteId } = await sdk.createOrder({
+  fromTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  toTokenAddress: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
+  amount: '50000000000000000',
+  walletAddress: makerAddress
+})
+```
+
+<ParamField path="params" type="OrderParams" required>
+  Order parameters (same as `placeOrder`)
+</ParamField>
+
+<ResponseField name="PreparedOrder" type="PreparedOrder">
+  Prepared order ready for signing and submission
+  
+  <ResponseField name="order" type="FusionOrder">
+    The FusionOrder instance
+  </ResponseField>
+  
+  <ResponseField name="hash" type="string">
+    Order hash
+  </ResponseField>
+  
+  <ResponseField name="quoteId" type="string">
+    Quote identifier
+  </ResponseField>
+  
+  <ResponseField name="nativeOrderFactory" type="Address">
+    Native order factory address (if applicable)
+  </ResponseField>
+</ResponseField>
+
+### submitOrder
+
+Submits a previously created order to the relayer.
+
+**Note:** For orders from native assets, use `submitNativeOrder` instead.
+
+```typescript
+const orderInfo = await sdk.submitOrder(order, quoteId)
+```
+
+<ParamField path="order" type="FusionOrder" required>
+  The FusionOrder instance to submit
+</ParamField>
+
+<ParamField path="quoteId" type="string" required>
+  Quote identifier from order creation
+</ParamField>
+
+<ResponseField name="OrderInfo" type="OrderInfo">
+  Information about the submitted order
+</ResponseField>
+
+### submitNativeOrder
+
+Submits an order from native assets (e.g., ETH) to the relayer.
+
+**Note:** Orders from native assets must also be submitted on-chain via `NativeOrdersFactory.create`.
+
+```typescript
+const orderInfo = await sdk.submitNativeOrder(order, maker, quoteId)
+```
+
+<ParamField path="order" type="FusionOrder" required>
+  The FusionOrder instance to submit
+</ParamField>
+
+<ParamField path="maker" type="Address" required>
+  Maker's address
+</ParamField>
+
+<ParamField path="quoteId" type="string" required>
+  Quote identifier from order creation
+</ParamField>
+
+<ResponseField name="OrderInfo" type="OrderInfo">
+  Information about the submitted native order
+</ResponseField>
+
+### getOrderStatus
+
+Retrieves the current status of an order.
+
+```typescript
+const status = await sdk.getOrderStatus(orderHash)
+```
+
+<ParamField path="orderHash" type="string" required>
+  The order hash to query
+</ParamField>
+
+<ResponseField name="OrderStatusResponse" type="OrderStatusResponse">
+  Detailed order status information
+  
+  <ResponseField name="status" type="OrderStatus">
+    Current order status (pending, filled, cancelled, etc.)
+  </ResponseField>
+  
+  <ResponseField name="order" type="LimitOrderV4Struct">
+    The order structure
+  </ResponseField>
+  
+  <ResponseField name="extension" type="string">
+    Order extension data
+  </ResponseField>
+  
+  <ResponseField name="fills" type="Fill[]">
+    Array of fill transactions
+  </ResponseField>
+  
+  <ResponseField name="cancelTx" type="string | null">
+    Cancellation transaction hash (if cancelled)
+  </ResponseField>
+  
+  <ResponseField name="createdAt" type="string">
+    Order creation timestamp
+  </ResponseField>
+</ResponseField>
+
+### buildCancelOrderCallData
+
+Builds the call data for cancelling an order.
+
+```typescript
+const callData = await sdk.buildCancelOrderCallData(orderHash)
+```
+
+<ParamField path="orderHash" type="string" required>
+  The order hash to cancel
+</ParamField>
+
+<ResponseField name="callData" type="string">
+  Encoded call data for the cancel transaction
+</ResponseField>
+
+## Example
+
+```typescript
+import { FusionSDK, NetworkEnum } from '@1inch/fusion-sdk'
+
+// Initialize SDK
+const sdk = new FusionSDK({
+  url: 'https://api.1inch.dev/fusion',
+  network: NetworkEnum.ETHEREUM,
+  authKey: 'your-auth-key'
+})
+
+// Get a quote
+const quote = await sdk.getQuote({
+  fromTokenAddress: '0x6b175474e89094c44da98b954eedeac495271d0f',
+  toTokenAddress: '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2',
+  amount: '1000000000000000000000'
+})
+
+// Get active orders
+const orders = await sdk.getActiveOrders({ page: 1, limit: 10 })
+```
