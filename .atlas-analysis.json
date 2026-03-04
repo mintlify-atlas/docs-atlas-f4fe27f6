@@ -1,0 +1,101 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "1inch Fusion SDK",
+  "projectDescription": "TypeScript SDK for building and executing token swaps using 1inch Fusion Mode, a decentralized order execution protocol with Dutch auction mechanics.",
+  "theme": "mint",
+  "primaryColor": "#1B8DEE",
+  "lightColor": "#3BA0F4",
+  "darkColor": "#0F6FBE",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/fusion-mode",
+              "concepts/auction-mechanics",
+              "concepts/order-lifecycle",
+              "concepts/networks"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/placing-orders",
+              "guides/native-token-swaps",
+              "guides/custom-presets",
+              "guides/order-management",
+              "guides/integrator-fees",
+              "guides/websocket-integration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "SDK",
+            "pages": [
+              "api/fusion-sdk",
+              "api/websocket-api",
+              "api/configuration"
+            ]
+          },
+          {
+            "group": "Orders",
+            "pages": [
+              "api/fusion-order",
+              "api/auction-details",
+              "api/whitelist"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/auction-calculator",
+              "api/connectors",
+              "api/types"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Dutch auction-based order execution with customizable price curves",
+    "Native token swap support with automatic wrapping",
+    "Real-time order tracking via WebSocket API",
+    "Custom preset configuration for auction parameters",
+    "Integrator fee support for revenue sharing",
+    "Multi-network support (Ethereum, Binance Smart Chain, Polygon, etc.)"
+  ],
+  "publicApiSurface": [
+    "FusionSDK",
+    "WebSocketApi",
+    "FusionOrder",
+    "AuctionDetails",
+    "AuctionCalculator",
+    "Whitelist",
+    "PrivateKeyProviderConnector",
+    "NetworkEnum",
+    "OrderStatus",
+    "PresetEnum",
+    "Quote",
+    "QuoteParams",
+    "OrderParams",
+    "Address",
+    "MakerTraits",
+    "NativeOrdersFactory"
+  ]
+}
